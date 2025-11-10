@@ -1,0 +1,48 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  creationTimestamp: null
+  name: thesource
+spec:
+  dataVolumeTemplates:
+  - metadata:
+      creationTimestamp: null
+      name: imported-volume-z2smx
+    spec:
+      source:
+        http:
+          url: https://image-builder-service-production-2.s3.us-east-1.amazonaws.com/composer-api-fe5992a1-bce5-42f3-837d-87e89a898858-disk.qcow2?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Checksum-Mode=ENABLED&X-Amz-Credential=ASIAWX4I7AK3WFIEYU5M%2F20251108%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251108T101015Z&X-Amz-Expires=604800&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEAoaCXVzLWVhc3QtMSJGMEQCIGiDraK4Va2zdmMV3NmqDYgGD%2FlmGDYtUu%2BeY4%2BhAfczAiAhY3gWssfcnxRDFSPfaFQRoPrQNdX0avsJyWoGvrpbnCrGBQjT%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F8BEAIaDDQ2MzYwNjg0MjAzOSIMb5HbCKpRcPpJXx24KpoFLR%2BWOgGYWxrIY7j6XMeewJ2iFMlw9OKerDmPFB2T%2Fmrx5es%2F9FZDnTVW0786k0DsuNDOjao3s2bRHxqplZaZBhN%2BlaPmrbIG02muiYbJyC%2FYZSJPXfl7vRTj2yrapROZIbIYOBOQ4Tq18O%2BfLGNb5BmyN0cemn%2BSx16EeFDkPTzDj387LYrQNfMPN%2FITHBWN6TpkhSMi4mwEMfoOOppCgJ1LQzJO4ws6zQt7FfktQnFWHdX5b6Xl80V7h0FcIWQp65%2BTKQMYMs%2FL98qBA2ebj2bI0jb0e5p2P9kcVShs1U1sIlerVKyZxhsjnnqZAJG3sRdPNgbkaK%2Fogec9OaA1KHh9OKtsshwm86Eeah9Rh15QLLuFZB4Tl1Lbe7%2BABbgFvpdEwP%2BFv8xNREdMcwGteVPhy3P6ijh%2BRD%2B1m5pMXsutoovgeWmJ6kr9KE3xl3rA9clziSjpS2cgbc0DdNvNogltP2wy9oylGz3hfYEZaDCBBAEtdZ1gdZw5LQ0%2BgIYrbI1lRbPe%2BfAWOw2KWBvckNjw4fNdAuNzlVezK7o1UQQhaf6t%2FOYMLt3GOr6%2B3Rhy%2FtpDgzSHCM7mZILsC3WehbQYU5l6vqZQ6cDulHs2Wd42LTyapi00nRinMjOPeywB5Zd%2BNAuEpXqU4KbPRvXyYqKZOpJdMh%2FCrXTPouB5zTt4OWE24flOLpbr2ASdiYn%2BvTfWzvmXlFTyGAbcjthj2tghYdvMnJkD9E0x9HG1StYk3xrK2Ja0gBSYU4458tRCwl%2FKwHwYo6skm9A0UkGX7XQC3ZDxUmmZFnQ3PtLfeRVsASVoU13rzWeuepy5VBMkB2aDCR%2FWjbqKQLD8r8w03CGsIVzx4WzsMoezDdRFAXU6JR%2BfNf%2BrHlptMOSnvMgGOrIBOKlpJq03pp0X2Vye4cUfjK7RgGMEIGZMgB5BaB5ns0xgrStxCdl5%2BzqRJBkASNWlcZc1fJhXbgZjMYlBRjEcThUCBpGs7eoHy8Rj%2BHOMOeGXFddBEezXzpYdVyMpQNoWGr7mF0Tst%2BApRU9%2FOzm0YZDONSMKZJAUmuKlTBtSfSIvRNMHGxOBX1Z3tMd4SxuTytX%2BHYlzuCwp332N4K51c23nYk5HpPR6vmV0pzgo1k8w4Q%3D%3D&X-Amz-SignedHeaders=host&x-id=GetObject&X-Amz-Signature=a9a91c79178f767f3306e496efb36d91aa589310bf0a19dc91d44f0f2c814ce8
+      storage:
+        resources:
+          requests:
+            storage: 20Gi
+  instancetype:
+    name: o1.large
+  runStrategy: Always
+  template:
+    metadata:
+      creationTimestamp: null
+    spec:
+      domain:
+        devices: {}
+        resources: {}
+      terminationGracePeriodSeconds: 180
+      accessCredentials:
+        - sshPublicKey:
+            propagationMethod:
+              noCloud: {}
+            source:
+              secret:
+                secretName: techquest
+      volumes:
+      - dataVolume:
+          name: imported-volume-z2smx
+        name: imported-volume-z2smx
+      - cloudInitNoCloud:
+          userData: |-
+            #cloud-config
+            user: cloud-user
+            password: redhat
+            chpasswd: { expire: False }
+        name: cloudinitdisk
+status: {}
