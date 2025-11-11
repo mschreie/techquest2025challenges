@@ -2,7 +2,7 @@
 
 # create the VMs
 for i in {1..20}; do
-   virtctl create vm --instancetype o1.large --name thesource --volume-import "type:http,size:20Gi,url:$IMAGEBUILDERURL" \
+   virtctl create vm --instancetype u1.small --name thesource --volume-import "type:http,size:20Gi,url:$IMAGEBUILDERURL" \
    | awk '
        /^      terminationGracePeriodSeconds: 180/ { print; 
                   print "      accessCredentials:"
