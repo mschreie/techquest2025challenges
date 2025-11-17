@@ -3,8 +3,9 @@
 for CLUSTERID in $MUTLICLUSTERID
 do 
 	echo $CLUSTERID
+	PW=ADMINPW_$CLUSTERID  
         echo "Login to cluster...."
-        oc login -u admin -p $ADMINPD https://api.cluster-${CLUSTERID}.dynamic.redhatworkshops.io:6443/
+        oc login -u admin -p ${!PW} https://api.cluster-${CLUSTERID}.dynamic.redhatworkshops.io:6443/
 	# create the VMs
 	for ((i=1;i<=MAXUSER;i++)); do
            echo "Create VM Manifest"
@@ -37,7 +38,7 @@ do
 	       { print }
 	   ' > virtualmachine-thesource_$CLUSTERID_$i.yaml
 	   oc create -f secret.yaml -n mtv-user$i
-           echo "Create VM §CLUSTERID $i"
+           echo "Create VM $CLUSTERID $i"
 	   oc create -f virtualmachine-thesource_$CLUSTERID_$i.yaml -n mtv-user$i
 	done
 done
