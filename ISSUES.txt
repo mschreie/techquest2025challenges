@@ -1,0 +1,11 @@
+# List of things to improve or to change
+
+## ssh key handling
+Setting up new VMs create new ssh-host-keys which need to be updated in local known_hosts file. Currently i delete old key manualy and type yes 2x number of systems.
+
+### ssh key handling multi cluster
+The Vms are identified with vmname and namespace, but in mutli-cluster setup we have duplicate host identifiers with differen host-keys.
+
+### Move from Bash to Ansible
+As this scales out to ca 40 hosts and has multiple steps, it would be nice if i could just redo the failed / still missing systems, instead of redoing them all. 
+

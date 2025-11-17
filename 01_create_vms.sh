@@ -9,6 +9,7 @@ do
 	# create the VMs
 	for ((i=1;i<=MAXUSER;i++)); do
            echo "Create VM Manifest"
+	   echo virtualmachine-thesource_${CLUSTERID}_${i}.yaml
 	   virtctl create vm --instancetype u1.small --name thesource --volume-import "type:http,size:20Gi,url:$IMAGEBUILDERURL" \
 	   | awk '
 	       /^      terminationGracePeriodSeconds: 180/ { print; 
@@ -36,10 +37,10 @@ do
 			  next
 	       }
 	       { print }
-	   ' > virtualmachine-thesource_$CLUSTERID_$i.yaml
+	   ' > virtualmachine-thesource_${CLUSTERID}_${i}.yaml
 	   oc create -f secret.yaml -n mtv-user$i
            echo "Create VM $CLUSTERID $i"
-	   oc create -f virtualmachine-thesource_$CLUSTERID_$i.yaml -n mtv-user$i
+	   oc create -f virtualmachine-thesource_${CLUSTERID}_${i}.yaml -n mtv-user$i
 	done
 done
 
