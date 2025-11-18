@@ -4,7 +4,7 @@ Value: 40
 Scoring: Static
 
 Flag: regex:
-Booted image: image-registry.openshift-image-registry.svc:5000/mtv-user\d+.*\n\s+Digest: sha256:.*\n\s+Version:
+Booted image: image-registry.openshift-image-registry.svc:5000/mtv-user\d+.*(\n)*\s+Digest: sha256:.*(\n)*\s+Version:
 
 ## The Ask - in short
 You need to create a bootc container image for a new VM which needs to be uploaded in local registry. For the initial boot, you need to transfer it into a qcow2 image, upload that into OCP-V from which you create a image mode based VM.
