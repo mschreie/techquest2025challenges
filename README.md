@@ -77,8 +77,7 @@ podman login --tls-verify=false -u kubeadmin -p $(oc whoami -t) image-registry.o
 
 podman push --remove-signatures --tls-verify=false registry.redhat.io/rhel10/bootc-image-builder:10.0  image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.0 
 
-podman push --remove-signatures --tls-verify=false registry.redhat.io/rhel10/rhel-bootc:10.0
-image-registry.openshift-image-registry.svc:5000/openshift/rhel-bootc:10.0
+podman push --remove-signatures --tls-verify=false registry.redhat.io/rhel10/rhel-bootc:10.0 image-registry.openshift-image-registry.svc:5000/openshift/rhel-bootc:10.0
  
 
 
@@ -88,6 +87,3 @@ podman rmi registry.redhat.io/rhel10/rhel-bootc:10.0
 
 podman logout
 podman logout image-registry.openshift-image-registry.svc:5000
-
-	This is defined here: 
-
