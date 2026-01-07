@@ -38,7 +38,9 @@ i also added (for convenience):
 - vim-common
 - vim-data
 - vim-enhanced
-The blueprint within image-builder is called: irhel-10-x86_64-10232025-1241 images
+The blueprint within image-builder is called: irhel-10-x86_64-10232025-1241 images.
+If you do not find the blueprint in the portal, you might want to upload the blueprint out of this repository from 
+	imagebuilder-blueprint/rhel-10-x86_64-20251229.json
 You need to build the image as they expire after a couple of hours:
 https://console.redhat.com/insights/image-builder
 => Inventory

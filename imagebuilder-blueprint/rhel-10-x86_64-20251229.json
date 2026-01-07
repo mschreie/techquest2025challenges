@@ -1,0 +1,54 @@
+{
+  "content_sources": [],
+  "customizations": {
+    "hostname": "imagemaker",
+    "locale": {
+      "keyboard": "de-mac_nodeadkeys",
+      "languages": [
+        "C.UTF-8",
+        "de_DE.UTF-8"
+      ]
+    },
+    "packages": [
+      "podman",
+      "podman-docker",
+      "podman-remote",
+      "vim-common",
+      "vim-enhanced",
+      "vim-data",
+      "buildah",
+      "cockpit-podman",
+      "xorg-x11-xauth",
+      "bash-color-prompt",
+      "qemu-guest-agent",
+      "git-all",
+      "zip",
+      "gzip",
+      "skopeo",
+      "skopeo-tests",
+      "curl",
+      "wget"
+    ],
+    "timezone": {
+      "timezone": "Europe/Berlin"
+    },
+    "users": [
+      {
+        "groups": [
+          "wheel"
+        ],
+        "hasPassword": true,
+        "name": "labuser",
+        "ssh_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINPbf8p7KeyYIj3eKEkbvvdZ43lTFahqOIZBobXse2wa techquest2025"
+      }
+    ]
+  },
+  "description": "RHEL 10 host to build image mode VMs from",
+  "distribution": "rhel-10",
+  "metadata": {
+    "exported_at": "2026-01-07 10:06:33.462807118 +0000 UTC",
+    "is_on_prem": false,
+    "parent_id": "063bccea-e1c8-4e20-b7da-eb01dec77af8"
+  },
+  "name": "rhel-10-x86_64-20251229"
+}
