@@ -1,3 +1,6 @@
+Now for Summit connect 2026
+
+
 This is the repo for two Challenges offered at Red Hat Summit Connect 2025 in Darmstadt. 
 The Tool and Entry Point is Catch the Flag Interface "https://red-hat-summit-connect-hands-on-day-2025.ctfd.io/"
 
