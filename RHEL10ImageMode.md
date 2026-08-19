@@ -45,7 +45,7 @@ Ensure you are in the correct project:
 then log in to your vm:   
 `virtctl -n mtv-$MYUID ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource`
 
-If want to, you can login to the OpenShift Web-UI, (but this exersice does not need this):    
+If you want to, you can login to the OpenShift Web-UI, (but this exersice does not need this):    
 https://console-openshift-console.apps.cluster-${MYCID}.dynamic.redhatworkshops.io    
     user: $MYUID    
     password:  $MYPASSWD    
@@ -121,7 +121,7 @@ Create a new image-mode VM
 Cost 2
 creating a OCP VM at CLI is a 2 step process:
 use `virtctl create vm...` to create a yaml file.
-Use `oc create -f <this yaml file> ...` to creaet the VM.   
+Use `oc create -f <this yaml file> ...` to create the VM.   
 IMPORTANT:   
 Ensure the VM to be created in your project `mtv-userX`
 
