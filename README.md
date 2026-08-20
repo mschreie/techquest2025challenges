@@ -65,33 +65,7 @@ bash 02_ssh_prep_vms.sh
 type yes 20 times . the script should do the rest
 
 ### ensure bootc-image-builder image and bootc image to be available:
-login to one VM:
-virtctl -n mtv-userX ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource
-podman login registry.redhat.io
+this is done through the script prepVM.sh on one of the VMs in each cluster.
 
-# check available versions !!
-podman pull registry.redhat.io/rhel10/bootc-image-builder:10.0
-podman pull registry.redhat.io/rhel10/rhel-bootc:10.0
-
-# check available version - take second-new version for update testing!!
-sudo podman pull quay.io/hummingbird-community/bootc-os:latest
-
-oc login --insecure-skip-tls-verify=false -u admin -p z0dJ4znJo1JJaxPu https://api.cluster-f78pb.dynamic.redhatworkshops.io:6443
-
-podman login --tls-verify=false -u kubeadmin -p $(oc whoami -t) image-registry.openshift-image-registry.svc:5000
-
-podman push --remove-signatures --tls-verify=false registry.redhat.io/rhel10/bootc-image-builder:10.0  image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.0 
-
-podman push --remove-signatures --tls-verify=false registry.redhat.io/rhel10/rhel-bootc:10.0 image-registry.openshift-image-registry.svc:5000/openshift/rhel-bootc:10.0
-
-podman push --remove-signatures --tls-verify=false registry.redhat.io/hummingbird-community/bootc-os:latest image-registry.openshift-image-registry.svc:5000/openshift/bootc-os:latest
- 
-
-
-## cleanup:
-podman rmi registry.redhat.io/rhel10/bootc-image-builder:10.0
-podman rmi registry.redhat.io/rhel10/rhel-bootc:10.0
-podman rmi registry.redhat.io/hummingbird-community/bootc-os:latest
-
-podman logout
-podman logout image-registry.openshift-image-registry.svc:5000
+and this script is executed_ from 02_ssh_prep_vms.sh 
+so there is no additional todo
