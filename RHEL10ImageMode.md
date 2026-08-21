@@ -85,7 +85,7 @@ Within the VM run `bootc status` and paste the output into the comment text fiel
 registry login
 Cost 1
 `oc login -u $MYUID -p $MYPASSWD https://api.cluster-${MYCID}.dyn.redhatworkshops.io:6443`<br>
-`podman login --tls-verify=false -u $MYUID -p $(oc whoami -t) image-registry.openshift-image-registry.svc:5000`
+`podman login --tls-verify=false -u $(oc whoami) -p $(oc whoami -t) image-registry.openshift-image-registry.svc:5000`
 
 Building a bootc image
 Cost 3
@@ -96,16 +96,24 @@ You also need to be logged in to the registry with `podman login`
 Before you succed with `podman login` you need an `oc login` first.   
 With `podman login`ensure to use the correct username `$MYUID`and your session key as mentiond in the text.
 
+SOLUTION: podman build -f Containerfile -t myrhel10:latest
+
 bootc container image upload
 Cost 3
 You created a bootc image. Which you can check via
 `podman images`. 
 You can upload the image with the following command:
 `podman push --tls-verify=false image-registry.openshift-image-registry.svc:5000/mtv-userX/bootc_image`
+SOLUTION: 
+podman tag localhost/myrhel10:latest image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10:latest
+podman push --tls-verify=false image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10:latest
 
 transformation of the bootc container image into a qcow2 image
 Cost 8
-`podman run  --tls-verify=false --privileged  --volume ./output:/output  --volume ./config.json:/config.json --volume /var/lib/containers/storage:/var/lib/containers/storage image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.0  --type qcow2  --config /config.json image-registry.openshift-image-registry.svc:5000/mtv-userX/bootc_image --output /output`
+`podman run  --tls-verify=false --privileged  --volume ./output:/output  --volume ./config.json:/config.json --volume /var/lib/containers/storage:/var/lib/containers/storage image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.2  --type qcow2  --config /config.json image-registry.openshift-image-registry.svc:5000/mtv-userX/bootc_image --output /output`
+
+SOLUTION:
+podman run --tls-verify=false --privileged  --volume ./output:/output  --volume ./config.json:/config.json --volume /var/lib/containers/storage  image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.2 --type qcow2 --config /config.json image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10 --output /output
 
 qcow2 image upload
 Cost 3
@@ -116,6 +124,8 @@ qcow2 image upload
 Cost 7
 To upload the image to a datavolume called rhel10image, the command would look like this:
 `virtctl image-upload dv rhel10image --size=12Gi  --image-path=output/qcow2/disk.qcow2 --storage-class=ocs-external-storagecluster-ceph-rbd --insecure --force-bind`
+SOLUTION: virtctl image-upload dv rhel10image --size=12Gi  --image-path=output/qcow2/disk.qcow2 --storage-class=ocs-external-storagecluster-ceph-rbd --insecure --force-bind
+
 
 Create a new image-mode VM
 Cost 2
@@ -142,3 +152,58 @@ while:
 * `rhel10imagemode` is the name of the VM to be built.
 * `rhel10image` is the name of the DV you uploaded the qcow image into.
 
+SOLUTION:
+CLOUD_INIT_USERDATA=$(base64 -w 0 cloud.init.txt)
+echo $CLOUD_INIT_USERDATA 
+virtctl create vm --instancetype u1.small --name rhel10imagemode --volume-import type:pvc,src:mtv-user1/rhel10image,name:rhel10imagemode --cloud-init configdrive  --cloud-init-user-data $CLOUD_INIT_USERDATA  | oc create -f - -n mtv-user1
+
+=======================================
+The image mode VM is up and running. Great
+
+You can find the ip-addresses of your VMs like this:
+oc get vmi -n mtv-user1 -o wide
+
+connect to the VM "thesource" and ask your webserver of rhel10imagemode  - it should provide the default welcome message apache webservers provide
+
+Now let your webserver provide your personal greeting:
+Patch your imagemode server by adding a file
+/var/www/html/index.html
+Welcome on the new image mode webserver!
+
+
+SOLUTION
+* alter/update Containerfile
+vi ....
+* run container build
+podman build -f Containerfile -t myrhel10:latest
+* push to registry
+podman tag myrhel10:latest image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10:latest
+podman push image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10:latest
+
+on the rhel10imagemode VM:
+* login to registry .... 
+	* oc needed
+~/bin/oc login -u user1 -p knNVx57U7izN0P1d https://api.cluster-dn94p.dyn.redhatworkshops.io:6443
+podman login --tls-verify=false -u $(~/bin/oc whoami) -p $(~/bin/oc whoami -t) image-registry.openshift-image-registry.svc:5000
+
+* make that login work for bootc command
+cp /run/containers/0/auth.json /etc/ostree/auth.json
+chmod 600 /etc/ostree/auth.json
+bootc upgrade
+
+last step not
+systemctl reboot
+
+thereafter:
+cloud-user@rhel10imagemode ~]$ sudo bootc status
+● Booted image: image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10
+        Digest: sha256:dd4282060546b3b50d8fac398268f6a03d4f7189df0669e308ac104f485f257a (amd64)
+       Version: 10.2 (2026-08-20T14:09:15Z)
+
+  Rollback image: image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10
+          Digest: sha256:c6f803aa592bb45629b7c44a937cc33aa20d71a11aa6e6c1467d854ae5c6f96a (amd64)
+         Version: 10.2 (2026-08-20T14:09:15Z)
+   UpdateVersion: 10.2 (2026-08-20T14:09:15Z)
+    UpdateDigest: sha256:dd4282060546b3b50d8fac398268f6a03d4f7189df0669e308ac104f485f257a
+[cloud-user@rhel10imagemode ~]$ 
+... but webserver did not show index.html

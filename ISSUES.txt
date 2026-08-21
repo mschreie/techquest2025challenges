@@ -1,5 +1,17 @@
 # List of things to improve or to change
 
+NEW issues:
+
+the image mode vm needs 
+- /etc/containers/registries.conf.d/99-openshift-internal.conf
+- oc binary
+
+
+
+
+
+OLD ISSUES:
+
 ## ssh key handling
 Setting up new VMs create new ssh-host-keys which need to be updated in local known_hosts file. Currently i delete old key manualy and type yes 2x number of systems.
 

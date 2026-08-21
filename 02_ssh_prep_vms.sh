@@ -45,7 +45,7 @@ do
         sed -i -e 's/ADMIN_PW=.*$/ADMIN_PW='$PW'/' prepVM.sh
         sed -i -e 's/USERID=.*$/USERID=user'$i'/' prepVM.sh
         virtctl -n mtv-user$i scp -i ~/.ssh/id_techquest ./prepVM.sh cloud-user@vmi/thesource:.
-        virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c "bash 'prepVM.sh'"
+        virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c "MYPW=GehHeim123 bash prepVM.sh"
 
 done
 
