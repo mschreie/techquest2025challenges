@@ -4,10 +4,12 @@
 
 # next 2 lines get exchanged by parent-script 02_ssh_prep_vms.sh
 CLUSTERID=dn94p
-ADMIN_PW=ADMINPW_dn94p
+ADMIN_PW=QHPXzQ0EYlzORwI3
+USERID=user1
 
-echo podman login registry.redhat.io
-podman login registry.redhat.io
+
+echo podman login -u USERID -p ADMIN_PW registry.redhat.io
+podman login -u $USERID -p $ADMIN_PW registry.redhat.io
 
 # Check available versions  at: https://catalog.redhat.com/en/search?q=image+builder&searchType=Containers
 echo

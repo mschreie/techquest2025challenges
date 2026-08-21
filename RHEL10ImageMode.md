@@ -11,7 +11,7 @@ You need to create a bootc container image for a new VM which needs to be upload
 
 ## Preparation
 You need a command line interface which is ssh capable. There you need `virtctl` and  `oc` bindary. If you do not have these binary  commands,  you can download them from :  
-https://console-openshift-console.apps.cluster-${MYCID}.dynamic.redhatworkshops.io/command-line-tools (login with your userX as found further down) and add them in some directoy which is searched by your PATH -settings.  
+https://console-openshift-console.apps.cluster-${MYCID}.dyn.redhatworkshops.io/command-line-tools (login with your userX as found further down) and add them in some directoy which is searched by your PATH -settings.  
 
 As our environment does not have officially signed certificates you might need 
 `--tls-verify=false` added to your commands pulling or pushing sth to a registry or repository.  
@@ -37,7 +37,7 @@ This should provide a URL wich includes a individual identity string. This strin
     MYCID=ZZZZZ   
 
 You got a "normal" RHEL 10 VM running in an OCP-V environment from where you do most of the work.  You need to login to OCP first:   
-`oc login -u $MYUID -p $MYPASSWD https://api.cluster-${MYCID}.dynamic.redhatworkshops.io:6443`
+`oc login -u $MYUID -p $MYPASSWD https://api.cluster-${MYCID}.dyn.redhatworkshops.io:6443`
 
 Ensure you are in the correct project:   
 `oc project mtv-$MYUID`   
@@ -46,7 +46,7 @@ then log in to your vm:
 `virtctl -n mtv-$MYUID ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource`
 
 If you want to, you can login to the OpenShift Web-UI, (but this exersice does not need this):    
-https://console-openshift-console.apps.cluster-${MYCID}.dynamic.redhatworkshops.io    
+https://console-openshift-console.apps.cluster-${MYCID}.dyn.redhatworkshops.io    
     user: $MYUID    
     password:  $MYPASSWD    
 
@@ -59,10 +59,10 @@ The RHEL VM you logged in to is a package based RHEL VM, called "thesource". You
 You will find a directory `/root/rhel_image_mode-main` with some helpful files to create bootc container image and the qcow image. You might need to alter the Containerfile slightly.   
 You will mainly use `podman` to create and upload the bootc image..
 You will find the following images within your OCP local registry:  
-The base image to create your bootc image from:   
-`image-registry.openshift-image-registry.svc:5000/openshift/rhel-bootc:10.0` 
+Tdynamiche base image to create your bootc image from:   
+`image-registry.openshift-image-registry.svc:5000/openshift/rhel-bootc:10.2` 
 The image builder to convert your bootc container into a qcow image for very frist boot:   
-`image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.0`   
+`image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.2`   
 To gain access to the local registry you must be logged in with oc command to the OpenShift platfrom `oc login ....`.     
 Then login to the registry as user `$MYUID` with the `session token` of your oc sesseion. If you can pull the images the login to the registry was successful. 
 
@@ -84,7 +84,7 @@ Within the VM run `bootc status` and paste the output into the comment text fiel
 ## Hints:
 registry login
 Cost 1
-`oc login -u $MYUID -p $MYPASSWD https://api.cluster-${MYCID}.dynamic.redhatworkshops.io:6443`<br>
+`oc login -u $MYUID -p $MYPASSWD https://api.cluster-${MYCID}.dyn.redhatworkshops.io:6443`<br>
 `podman login --tls-verify=false -u $MYUID -p $(oc whoami -t) image-registry.openshift-image-registry.svc:5000`
 
 Building a bootc image

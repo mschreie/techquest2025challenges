@@ -35,12 +35,15 @@ do
 	   virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c "sudo -i -- bash -c 'echo "PATH=/usr/local/bin:$PATH" >>/root/.bash_profile'" 
 	   echo Number 7
 	   virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c "sudo -i -- bash -c 'subscription-manager register --org 7257185 --activationkey RHEL'"
+	   echo Number 8
+	   virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c 'sudo tee /etc/containers/registries.conf.d/99-openshift-internal.conf >/dev/null' < ./99-openshift-internal.conf
 	done
 
         echo Only done on user1 as hub for central registry on each cluster ....
         i=1
         sed -i -e 's/CLUSTERID=.*$/CLUSTERID='$CLUSTERID'/' prepVM.sh
         sed -i -e 's/ADMIN_PW=.*$/ADMIN_PW='$PW'/' prepVM.sh
+        sed -i -e 's/USERID=.*$/USERID=user'$i'/' prepVM.sh
         virtctl -n mtv-user$i scp -i ~/.ssh/id_techquest ./prepVM.sh cloud-user@vmi/thesource:.
         virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c "bash 'prepVM.sh'"
 
