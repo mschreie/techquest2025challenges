@@ -20,7 +20,7 @@ do
     done
     for ((i=1;i<=MAXUSER;i++)); do
         echo Number 1
-        virtctl -n mtv-user$i scp -i ~/.ssh/id_techquest ./rhel_image_mode-main.zip cloud-user@vmi/thesource:.
+        virtctl -n mtv-user$i scp -i ~/.ssh/id_techquest ./files/rhel_image_mode-main.zip cloud-user@vmi/thesource:.
         echo Number 2
         virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c "sudo -i -- bash -c 'unzip /home/cloud-user/rhel_image_mode-main.zip && rm -f rhel_image_mode-main/README.md && mkdir rhel_image_mode-main/output'"
         echo Number 3
