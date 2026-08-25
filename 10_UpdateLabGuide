@@ -1,0 +1,17 @@
+. ./env.sh
+
+for CLUSTERID in $MUTLICLUSTERID
+do 
+    echo $CLUSTERID
+    PW=ADMINPW_$CLUSTERID  
+    PW=${!PW}
+    echo $PW
+    echo "Login to cluster...."
+    oc login -u admin -p $PW https://api.cluster-${CLUSTERID}.dyn.redhatworkshops.io:6443/
+
+    echo Testing the login first
+    virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c "hostname" 
+
+    COPYFILE_DISABLE=1 tar -C labguide -cf - . | virtctl -n default ssh -i ~/.ssh/id_techquest -c 'sudo tar xf - -C /var/www/html' cloud-user@vmi/util
+done
+

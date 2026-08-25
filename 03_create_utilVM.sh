@@ -41,7 +41,7 @@ do
     echo "Create util VM $CLUSTERID"
     oc create -f virtualmachine-util-${CLUSTERID}.yaml -n default
 
-    sleep 30
+#    sleep 30
 
     # login and get ssh running
     tmp=$(mktemp)
@@ -55,7 +55,7 @@ do
 
 
     echo Number 1
-    virtctl -n default scp -i ~/.ssh/id_techquest ./rhel_image_mode-main.zip cloud-user@vmi/util:.
+    virtctl -n default scp -i ~/.ssh/id_techquest ./files/rhel_image_mode-main.zip cloud-user@vmi/util:.
     echo Number 2
     virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c "sudo -i -- bash -c 'unzip /home/cloud-user/rhel_image_mode-main.zip && rm -f rhel_image_mode-main/README.md && mkdir rhel_image_mode-main/output'"
     echo Number 3
@@ -79,7 +79,10 @@ do
      virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c "MYPW=GehHeim123 bash prepRegistry.sh"
 
         echo Number 9 - for UTIL Server
-        virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo subscription-manager repos --enable codeready-builder-for-rhel-$(rpm -E %rhel)-$(uname -m)-rpms && dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm && dnf install -y pandoc'
+        virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo subscription-manager repos --enable codeready-builder-for-rhel-$(rpm -E %rhel)-$(uname -m)-rpms && sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm && sudo /usr/bin/crb enable && sudo dnf install -y pandoc'
+        virtctl -n default scp -i ~/.ssh/id_techquest ./files/markdown.conf ./files/md2html cloud-user@vmi/util:.
+
+        virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo mv /home/cloud-user/md2html /usr/local/bin && sudo chmod 755 /usr/local/bin/md2html && sudo mv /home/cloud-user/markdown.conf /etc/httpd/conf.d/ && sudo setsebool -P httpd_execmem on && sudo mv /etc/httpd/conf.d/welcome.conf /etc/httpd/conf.d/welcome.conf.disabled"
         virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo systemctl enable --now httpd.service'
 
         virtctl expose vmi util -n default --name=httpd --port=80 --target-port=80
