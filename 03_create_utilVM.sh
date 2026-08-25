@@ -83,7 +83,7 @@ do
         virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo systemctl enable --now httpd.service'
 
         virtctl expose vmi util -n default --name=httpd --port=80 --target-port=80
-        oc expose svc/httpd -n default 
+        oc create route edge httpd -n default --service=httpd --insecure-policy=Redirect
 
 done
 
