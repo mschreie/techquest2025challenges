@@ -62,10 +62,11 @@ run
 
 bash 01_create_vms.sh
 bash 02_ssh_prep_vms.sh
-type yes 20 times . the script should do the rest
+type yes 20 times. The script should do the rest.
+bash 03_create_utilVM.sh
 
 ### ensure bootc-image-builder image and bootc image to be available:
-this is done through the script prepVM.sh on one of the VMs in each cluster.
+this is done through the script prepRegistry.sh on one of the VMs in each cluster.
 
-and this script is executed_ from 02_ssh_prep_vms.sh 
+and this script is executed_ from 03_create_utilVM.sh
 so there is no additional todo
