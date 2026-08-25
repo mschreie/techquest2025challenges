@@ -69,7 +69,7 @@ do
     echo Number 7
     virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c "sudo -i -- bash -c 'subscription-manager register --org 7257185 --activationkey RHEL'"
     echo Number 8
-    virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo tee /etc/containers/registries.conf.d/99-openshift-internal.conf >/dev/null' < ./99-openshift-internal.conf
+    virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo tee /etc/containers/registries.conf.d/99-openshift-internal.conf >/dev/null' < ./files/99-openshift-internal.conf
 
      echo Preparing central registry on each cluster vi util VM ....
      sed -i -e 's/CLUSTERID=.*$/CLUSTERID='$CLUSTERID'/' prepRegistry.sh

@@ -34,7 +34,7 @@ do
         echo Number 7
         virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c "sudo -i -- bash -c 'subscription-manager register --org 7257185 --activationkey RHEL'"
         echo Number 8
-        virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c 'sudo tee /etc/containers/registries.conf.d/99-openshift-internal.conf >/dev/null' < ./99-openshift-internal.conf
+        virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c 'sudo tee /etc/containers/registries.conf.d/99-openshift-internal.conf >/dev/null' < ./files/99-openshift-internal.conf
     done
 
         ## moved to 03_create_utilVM.sh
