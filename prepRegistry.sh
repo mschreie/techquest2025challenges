@@ -5,8 +5,8 @@
 
 
 # next 2 lines get exchanged by parent-script 02_ssh_prep_vms.sh
-CLUSTERID=dn94p
-ADMIN_PW=QHPXzQ0EYlzORwI3
+CLUSTERID=mtmbd
+ADMIN_PW=D9MKs16lf5YDB5Qs
 
 ## LOGIN
 echo podman login -u mschreie --password-stdin  registry.redhat.io
