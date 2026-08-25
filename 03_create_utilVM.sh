@@ -10,7 +10,7 @@ do
     oc login -u admin -p $PW https://api.cluster-${CLUSTERID}.dyn.redhatworkshops.io:6443/
     # create the VM
     echo "Create VM Manifest"
-    echo virtualmachine-util${CLUSTERID}.yaml
+    echo tmp/virtualmachine-util${CLUSTERID}.yaml
     virtctl create vm --instancetype u1.small --name util --volume-import "type:http,size:20Gi,url:$IMAGEBUILDERURL" \
     | awk '
             /^      terminationGracePeriodSeconds: 180/ { print; 
@@ -36,10 +36,10 @@ do
                next
             }
             { print }
-        ' > virtualmachine-util-${CLUSTERID}.yaml
-    oc create -f secret.yaml -n default
+        ' > tmp/virtualmachine-util-${CLUSTERID}.yaml
+    oc create -f files/secret.yaml -n default
     echo "Create util VM $CLUSTERID"
-    oc create -f virtualmachine-util-${CLUSTERID}.yaml -n default
+    oc create -f tmp/virtualmachine-util-${CLUSTERID}.yaml -n default
 
 #    sleep 30
 

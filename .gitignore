@@ -1,4 +1,4 @@
 bin/
 .DS_Store
-virtualmachine-*.yaml
+tmp/virtualmachine-*.yaml
 rhel_image_mode-main/
