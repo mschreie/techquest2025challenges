@@ -44,7 +44,7 @@ do
     sleep 30
 
     # login and get ssh running
-    tmp=$(mktmp)
+    tmp=$(mktemp)
     for (( i = 0; i < 30; i++ )); do
        virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c "hostname" 2>$tmp
        err=$(<"$tmp")
@@ -79,7 +79,7 @@ do
      virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c "MYPW=GehHeim123 bash prepRegistry.sh"
 
         echo Number 9 - for UTIL Server
-        virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo subscription-manager repos --enable codeready-builder-for-rhel-$(rpm -E %rhel)-$(uname -m)-rpms && dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm && dnf install pandoc'
+        virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo subscription-manager repos --enable codeready-builder-for-rhel-$(rpm -E %rhel)-$(uname -m)-rpms && dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm && dnf install -y pandoc'
         virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo systemctl enable --now httpd.service'
 
         virtctl expose vmi util -n default --name=httpd --port=80 --target-port=80
