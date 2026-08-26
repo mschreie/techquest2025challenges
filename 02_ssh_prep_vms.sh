@@ -16,9 +16,27 @@ do
 
     for ((i=1;i<=MAXUSER;i++)); do
         # login and get ssh running
+        echo login and get ssh running
         virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c "hostname"
     done
+
     for ((i=1;i<=MAXUSER;i++)); do
+	# create network attachment definition for all projects
+	echo  create network attachment definition for all projects
+	sed -e 's/default/mtv-user'$i'/' files/networkattachmentdefinition.yaml | oc create -f - -n mtv-user$i
+
+	echo  patch the VM
+        oc patch vm thesource -n mtv-user2 --type=json -p '[
+          {"op":"add","path":"/spec/template/spec/domain/devices/interfaces","value":[
+            {"name":"default","masquerade":{}},
+            {"name":"nic-flat","bridge":{}}
+          ]},
+          {"op":"add","path":"/spec/template/spec/networks","value":[
+            {"name":"default","pod":{}},
+            {"name":"nic-flat","multus":{"networkName":"flatnetwork"}}
+          ]}
+        ]'
+
         echo Number 1
         virtctl -n mtv-user$i scp -i ~/.ssh/id_techquest ./files/rhel_image_mode-main.zip cloud-user@vmi/thesource:.
         echo Number 2
@@ -36,16 +54,6 @@ do
         echo Number 8
         virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c 'sudo tee /etc/containers/registries.conf.d/99-openshift-internal.conf >/dev/null' < ./files/99-openshift-internal.conf
     done
-
-        ## moved to 03_create_utilVM.sh
-        ## echo Only done on user1 as hub for central registry on each cluster ....
-        ## i=1
-        ## sed -i -e 's/CLUSTERID=.*$/CLUSTERID='$CLUSTERID'/' prepRegistry.sh
-        ## sed -i -e 's/ADMIN_PW=.*$/ADMIN_PW='$PW'/' prepRegistry.sh
-        ## sed -i -e 's/USERID=.*$/USERID=user'$i'/' prepRegistry.sh
-        ## virtctl -n mtv-user$i scp -i ~/.ssh/id_techquest ./prepRegistry.sh cloud-user@vmi/thesource:.
-        ## virtctl -n mtv-user$i ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource  -c "MYPW=GehHeim123 bash prepRegistry.sh"
-
 done
 
 

@@ -1,0 +1,17 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: flatnetwork
+  namespace: default
+spec:
+  config: |-
+    {
+      "cniVersion": "0.3.1",
+      "name": "flatnetwork",
+      "type": "bridge",
+      "bridge": "br-flat",
+      "macspoofchk": true,
+      "allowStepping": true,
+      "ipam": {}
+    }
+
