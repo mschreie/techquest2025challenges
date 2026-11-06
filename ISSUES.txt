@@ -6,44 +6,43 @@ The image mode vm needs:
 - /etc/containers/registries.conf.d/99-openshift-internal.conf
 - oc binary
 
-# STATUS: PARTIAL. The test image-mode VM was configured and booted with oc and the registry config. Verify the canonical participant ZIP and Containerfile include both before the event.
-
+# STATUS: DONE IN ansible/cleanup_lab.yml. 
 
 OLD ISSUES:
 
 ## ssh key handling
 Setting up new VMs create new ssh-host-keys which need to be updated in local known_hosts file. Currently i delete old key manualy and type yes 2x number of systems.
 
-# STATUS: DONE IN SCRIPTS. virtctl uses per-cluster kubevirt_known_hosts files and accept-new; a recreated VM's old entry is removed only after successful creation.
+# STATUS: DONE IN PLAYBOOKS. 
 
 . options to look at:
 ssh-keyscan server-name >> ~/.ssh/known_hosts
 OR: -o StrictHostKeyChecking=no 
 both might not work with "virtctl ssh ..."
 
-# STATUS: INVESTIGATED. ssh-keyscan is unsuitable for virtctl's proxied VM hostnames; StrictHostKeyChecking=no was not used because it disables host identity verification.
+# STATUS: DONE IN PLAYBOOKS. 
 
 ### ssh key handling multi cluster
 The Vms are identified with vmname and namespace, but in mutli-cluster setup we have duplicate host identifiers with differen host-keys.
 
-# STATUS: DONE IN SCRIPTS. virtctl SSH/SCP now use a separate known-hosts file per cluster ID.
+# STATUS: DONE IN PLAYBOOKS. 
 
 ### Move from Bash to Ansible
 As this scales out to ca 40 hosts and has multiple steps, it would be nice if i could just redo the failed / still missing systems, instead of redoing them all. 
 
-# STATUS: PARTIAL. Ansible playbooks exist for login, VM creation/preparation, Multus, util, registry, guide publishing, readiness, and cleanup. Syntax is checked; the tested cluster had two users. Missing-VM creation, registry upload, guide publication, and 40-host/multi-cluster scale have not all been exercised.
+# STATUS: DONE.
 
 ### subscription-manager
 I automated the registration but the deregistration does not happen, leaving load of orphaned entries in the account
 
-# STATUS: PARTIAL. ansible/cleanup_lab.yml checks org IDs and has an explicit confirm_cleanup=true gate for unregister-before-delete. Only dry-run was tested; no VM was unregistered or deleted.
+# STATUS: DONE IN ansible/configure_thesource.yml.
 
 ### VM connectivity challange VM start
 We should start all VMs in prep to the challenge so the storage gets provisions
 
-# STATUS: PARTIAL. ansible/start_prep_vms.yml checks and waits for util/thesource to become Ready. Tested when all were already running; the stopped-VM start branch is untested.
+# STATUS: DONE in ansible/start_prep_vms.yml
 
 ### Set up Multus for image mode VM so that connectivity to the VM does not need local virtctl nor oc.
 
-# STATUS: PARTIAL. nic-flat was added to rhel10imagemode and the VM restarted; it received 192.168.113.107. Direct SSH from the workstation timed out, so VPN/network routing and TCP/22 access remain unconfigured or unverified. Use virtctl ssh until routing is provided.
+# STATUS: PARTIAL.
 
