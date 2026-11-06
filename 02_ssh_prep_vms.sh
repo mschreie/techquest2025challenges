@@ -4,9 +4,37 @@
 
 . ./env.sh
 
+# changed: stop on errors and avoid running SSH steps without the private key.
+set -e
+
+if [[ ! -r ~/.ssh/id_techquest ]]; then
+  echo "Missing SSH private key: ~/.ssh/id_techquest" >&2
+  exit 1
+fi
+
+# changed: use one verified, cluster-specific host-key file for SSH and SCP.
+vssh() {
+  local namespace=$1
+  shift
+  virtctl -n "$namespace" ssh --known-hosts "$SSH_KNOWN_HOSTS" \
+    --local-ssh-opts='-o StrictHostKeyChecking=accept-new' "$@"
+}
+
+vscp() {
+  local namespace=$1
+  shift
+  virtctl -n "$namespace" scp --known-hosts "$SSH_KNOWN_HOSTS" \
+    --local-ssh-opts='-o StrictHostKeyChecking=accept-new' "$@"
+}
+
 for CLUSTERID in $MUTLICLUSTERID
 do 
     echo $CLUSTERID
+	# changed: keep different clusters' VM host keys separate.
+    SSH_KNOWN_HOSTS="$HOME/.ssh/kubevirt_known_hosts-$CLUSTERID"
+    mkdir -p "$HOME/.ssh"
+    touch "$SSH_KNOWN_HOSTS"
+    chmod 600 "$SSH_KNOWN_HOSTS"
     PW=ADMINPW_$CLUSTERID  
     PW=${!PW}
     echo $PW
@@ -26,7 +54,7 @@ do
 	sed -e 's/default/mtv-user'$i'/' files/networkattachmentdefinition.yaml | oc create -f - -n mtv-user$i
 
 	echo  patch the VM
-        oc patch vm thesource -n mtv-user2 --type=json -p '[
+        oc patch vm thesource -n mtv-user$i --type=json -p '[
           {"op":"add","path":"/spec/template/spec/domain/devices/interfaces","value":[
             {"name":"default","masquerade":{}},
             {"name":"nic-flat","bridge":{}}

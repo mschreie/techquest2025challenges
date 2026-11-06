@@ -1,0 +1,184 @@
+---
+- name: Configure registry access and subscription on thesource VMs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    repo_dir: "{{ playbook_dir | dirname }}"
+    cluster_id: mpfcp
+    rhsm_org_id: "11009103"
+    rhsm_activation_key: RHEL
+    user_ids: "{{ range(1, max_users + 1) | list }}"
+    ssh_key: "{{ lookup('env', 'HOME') }}/.ssh/id_techquest"
+    ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id }}"
+    registry_config_path: /etc/containers/registries.conf.d/99-openshift-internal.conf
+    registry_config: "{{ lookup('file', repo_dir + '/files/99-openshift-internal.conf') }}"
+
+  tasks:
+    - name: Read configured clusters and participant count from env.sh
+      ansible.builtin.shell: |
+        source ./env.sh
+        printf '%s\n' "$MUTLICLUSTERID" "$MAXUSER"
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      register: lab_settings
+      changed_when: false
+
+    - name: Store lab settings
+      ansible.builtin.set_fact:
+        configured_clusters: "{{ lab_settings.stdout_lines[0].split() }}"
+        max_users: "{{ lab_settings.stdout_lines[1] | int }}"
+
+    - name: Confirm the requested cluster is configured
+      ansible.builtin.assert:
+        that:
+          - cluster_id in configured_clusters
+        fail_msg: "Cluster {{ cluster_id }} is not listed in env.sh."
+
+    - name: Confirm the active OpenShift endpoint
+      ansible.builtin.command: oc whoami --show-server
+      register: active_server
+      changed_when: false
+
+    - name: Refuse to configure a different cluster
+      ansible.builtin.assert:
+        that:
+          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+        fail_msg: "oc is connected to {{ active_server.stdout }}, not {{ cluster_id }}."
+
+    - name: Require admin access to configure all participant VMs
+      ansible.builtin.command: oc whoami
+      register: active_user
+      changed_when: false
+
+    - name: Confirm admin access
+      ansible.builtin.assert:
+        that:
+          - active_user.stdout == 'admin'
+        fail_msg: "Log in as admin before configuring participant VMs."
+
+    - name: Read the registry configuration from each VM
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - -n
+          - "mtv-user{{ item }}"
+          - ssh
+          - --known-hosts
+          - "{{ ssh_known_hosts }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+          - -i
+          - "{{ ssh_key }}"
+          - cloud-user@vmi/thesource
+          - -c
+          - "sudo cat {{ registry_config_path }}"
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_ids }}"
+      loop_control:
+        label: "mtv-user{{ item }}"
+      register: registry_config_checks
+      changed_when: false
+      failed_when: false
+
+    - name: Install or update registry configuration only when needed
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - -n
+          - "mtv-user{{ item }}"
+          - ssh
+          - --known-hosts
+          - "{{ ssh_known_hosts }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+          - -i
+          - "{{ ssh_key }}"
+          - cloud-user@vmi/thesource
+          - -c
+          - >-
+            sudo install -d -m 0755 /etc/containers/registries.conf.d &&
+            sudo tee {{ registry_config_path }} >/dev/null &&
+            sudo restorecon {{ registry_config_path }}
+        stdin: "{{ registry_config }}"
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_ids }}"
+      loop_control:
+        index_var: user_index
+        label: "mtv-user{{ item }}"
+      when: >-
+        registry_config_checks.results[user_index].rc != 0 or
+        (registry_config_checks.results[user_index].stdout | trim) != (registry_config | trim)
+      register: registry_config_apply
+      changed_when: true
+
+    - name: Check subscription identity on each VM
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - -n
+          - "mtv-user{{ item }}"
+          - ssh
+          - --known-hosts
+          - "{{ ssh_known_hosts }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+          - -i
+          - "{{ ssh_key }}"
+          - cloud-user@vmi/thesource
+          - -c
+          - sudo subscription-manager identity
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_ids }}"
+      loop_control:
+        label: "mtv-user{{ item }}"
+      register: subscription_checks
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Refuse to alter a registration owned by another organization
+      ansible.builtin.assert:
+        that:
+          - "'org ID: ' + rhsm_org_id in item.stdout"
+        fail_msg: "A thesource VM is registered to a different Red Hat organization; no registration was changed."
+      loop: "{{ subscription_checks.results }}"
+      loop_control:
+        label: participant VM
+      when: item.rc == 0
+
+    - name: Stop if the subscription query failed for a reason other than not being registered
+      ansible.builtin.assert:
+        that:
+          - "'not yet registered' in (item.stderr | lower)"
+        fail_msg: "Could not check the Red Hat subscription; no registration was attempted."
+      loop: "{{ subscription_checks.results }}"
+      loop_control:
+        label: participant VM
+      when: item.rc != 0
+
+    - name: Register only VMs that are not already registered
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - -n
+          - "mtv-user{{ item.item }}"
+          - ssh
+          - --known-hosts
+          - "{{ ssh_known_hosts }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+          - -i
+          - "{{ ssh_key }}"
+          - cloud-user@vmi/thesource
+          - -c
+          - "sudo subscription-manager register --org {{ rhsm_org_id }} --activationkey {{ rhsm_activation_key }}"
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ subscription_checks.results }}"
+      loop_control:
+        label: "mtv-user{{ item.item }}"
+      when: item.rc != 0
+      register: subscription_register
+      changed_when: true
+      no_log: true

@@ -1,0 +1,121 @@
+---
+- name: Create only missing thesource VMs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    repo_dir: "{{ playbook_dir | dirname }}"
+    cluster_id: mpfcp
+
+  tasks:
+    - name: Load cluster settings and image URL from env.sh
+      ansible.builtin.shell: |
+        set -a
+        source ./env.sh
+        printf '%s\n' "$MUTLICLUSTERID" "$MAXUSER" "$IMAGEBUILDERURL"
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      register: lab_settings
+      changed_when: false
+      no_log: true
+
+    - name: Store lab settings without displaying the signed image URL
+      ansible.builtin.set_fact:
+        configured_clusters: "{{ lab_settings.stdout_lines[0].split() }}"
+        max_users: "{{ lab_settings.stdout_lines[1] | int }}"
+        image_builder_url: "{{ lab_settings.stdout_lines[2] }}"
+      no_log: true
+
+    - name: Confirm the requested cluster is configured
+      ansible.builtin.assert:
+        that:
+          - cluster_id in configured_clusters
+        fail_msg: "Cluster {{ cluster_id }} is not listed in env.sh."
+
+    - name: Confirm oc is logged in to the requested cluster
+      ansible.builtin.command: oc whoami --show-server
+      register: active_server
+      changed_when: false
+
+    - name: Refuse to create VMs with the wrong OpenShift identity
+      ansible.builtin.assert:
+        that:
+          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+        fail_msg: >-
+          oc is connected to {{ active_server.stdout }}; expected cluster {{ cluster_id }}.
+          Log in as admin to the intended cluster first.
+
+    - name: Confirm oc is logged in as admin
+      ansible.builtin.command: oc whoami
+      register: active_user
+      changed_when: false
+
+    - name: Require admin access before creating participant VMs
+      ansible.builtin.assert:
+        that:
+          - active_user.stdout == 'admin'
+        fail_msg: "This playbook creates VMs for multiple users and must run with oc logged in as admin."
+
+    - name: Check whether each thesource VM already exists
+      ansible.builtin.command: oc get vm thesource -n mtv-user{{ item }}
+      loop: "{{ range(1, max_users + 1) | list }}"
+      loop_control:
+        label: "mtv-user{{ item }}"
+      register: vm_checks
+      changed_when: false
+      failed_when: vm_checks.rc != 0 and 'NotFound' not in vm_checks.stderr
+
+    - name: Ensure the SSH public-key secret exists in each project
+      ansible.builtin.command: oc apply -f files/secret.yaml -n mtv-user{{ item }}
+      args:
+        chdir: "{{ repo_dir }}"
+      loop: "{{ range(1, max_users + 1) | list }}"
+      loop_control:
+        label: "mtv-user{{ item }}"
+      register: secret_apply
+      changed_when: "'unchanged' not in secret_apply.stdout"
+
+    - name: Create a manifest only for missing VMs
+      ansible.builtin.shell: |
+        set -o pipefail
+        virtctl create vm --instancetype u1.small --name thesource \
+          --volume-import "type:http,size:20Gi,url:{{ image_builder_url }}" |
+        awk '
+          /^      terminationGracePeriodSeconds: 180/ {
+            print
+            print "      accessCredentials:"
+            print "        - sshPublicKey:"
+            print "            propagationMethod:"
+            print "              noCloud: {}"
+            print "            source:"
+            print "              secret:"
+            print "                secretName: techquest"
+            next
+          }
+          /^status: {}/ {
+            print "      - cloudInitNoCloud:"
+            print "          userData: |-"
+            print "            #cloud-config"
+            print "            user: cloud-user"
+            print "            password: redhat"
+            print "            chpasswd: { expire: False }"
+            print "        name: cloudinitdisk"
+            print
+            next
+          }
+          { print }
+        ' |
+        oc create -f - -n "mtv-user{{ item }}"
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ range(1, max_users + 1) | list }}"
+      loop_control:
+        index_var: user_index
+        label: "mtv-user{{ item }}"
+      when: vm_checks.results[user_index].rc != 0
+      changed_when: true
+      no_log: true

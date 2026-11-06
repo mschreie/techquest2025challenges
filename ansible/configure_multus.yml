@@ -1,0 +1,120 @@
+---
+- name: Ensure the participant Multus network is configured
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    repo_dir: "{{ playbook_dir | dirname }}"
+    cluster_id: mpfcp
+    network_patch:
+      spec:
+        template:
+          spec:
+            domain:
+              devices:
+                interfaces:
+                  - name: default
+                    masquerade: {}
+                  - name: nic-flat
+                    bridge: {}
+            networks:
+              - name: default
+                pod: {}
+              - name: nic-flat
+                multus:
+                  networkName: flatnetwork
+
+  tasks:
+    - name: Read configured clusters and participant count from env.sh
+      ansible.builtin.shell: |
+        source ./env.sh
+        printf '%s\n' "$MUTLICLUSTERID" "$MAXUSER"
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      register: lab_settings
+      changed_when: false
+
+    - name: Store lab settings
+      ansible.builtin.set_fact:
+        configured_clusters: "{{ lab_settings.stdout_lines[0].split() }}"
+        max_users: "{{ lab_settings.stdout_lines[1] | int }}"
+
+    - name: Confirm the requested cluster is configured
+      ansible.builtin.assert:
+        that:
+          - cluster_id in configured_clusters
+        fail_msg: "Cluster {{ cluster_id }} is not listed in env.sh."
+
+    - name: Confirm the active OpenShift endpoint
+      ansible.builtin.command: oc whoami --show-server
+      register: active_server
+      changed_when: false
+
+    - name: Refuse to modify a different cluster
+      ansible.builtin.assert:
+        that:
+          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+        fail_msg: "oc is connected to {{ active_server.stdout }}, not {{ cluster_id }}."
+
+    - name: Confirm admin access
+      ansible.builtin.command: oc whoami
+      register: active_user
+      changed_when: false
+
+    - name: Require admin before preparing multiple namespaces
+      ansible.builtin.assert:
+        that:
+          - active_user.stdout == 'admin'
+        fail_msg: "Log in to OpenShift as admin before configuring participant networks."
+
+    - name: Apply the flatnetwork definition in each participant namespace
+      ansible.builtin.shell: >-
+        sed 's/namespace: default/namespace: mtv-user{{ item }}/'
+        files/networkattachmentdefinition.yaml | oc apply -f -
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      loop: "{{ range(1, max_users + 1) | list }}"
+      loop_control:
+        label: "mtv-user{{ item }}"
+      register: network_apply
+      changed_when: "'unchanged' not in network_apply.stdout"
+
+    - name: Read each thesource VM specification
+      ansible.builtin.command: oc get vm thesource -n mtv-user{{ item }} -o json
+      loop: "{{ range(1, max_users + 1) | list }}"
+      loop_control:
+        label: "mtv-user{{ item }}"
+      register: vm_specs
+      changed_when: false
+
+    - name: Record VMs missing the nic-flat interface or network
+      ansible.builtin.set_fact:
+        vms_needing_network: "{{ vms_needing_network | default([]) + [item.item] }}"
+      loop: "{{ vm_specs.results }}"
+      loop_control:
+        label: "mtv-user{{ item.item }}"
+      when: >-
+        'nic-flat' not in ((item.stdout | from_json).spec.template.spec.networks
+        | default([]) | map(attribute='name') | list)
+        or 'nic-flat' not in ((item.stdout | from_json).spec.template.spec.domain.devices.interfaces
+        | default([]) | map(attribute='name') | list)
+
+    - name: Add nic-flat only to VMs that need it
+      ansible.builtin.command:
+        argv:
+          - oc
+          - patch
+          - vm
+          - thesource
+          - -n
+          - "mtv-user{{ item }}"
+          - --type=merge
+          - -p
+          - "{{ network_patch | to_json }}"
+      loop: "{{ vms_needing_network | default([]) }}"
+      loop_control:
+        label: "mtv-user{{ item }}"
+      register: network_patch_result
+      changed_when: "'patched' in network_patch_result.stdout"

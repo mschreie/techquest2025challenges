@@ -1,0 +1,412 @@
+---
+- name: Safely inspect or clean up registered lab VMs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    repo_dir: "{{ playbook_dir | dirname }}"
+    cluster_id: mpfcp
+    rhsm_org_id: "11009103"
+    confirm_cleanup: false
+    ssh_key: "{{ lookup('env', 'HOME') }}/.ssh/id_techquest"
+    ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id }}"
+
+  tasks:
+    - name: Read configured clusters and participant count from env.sh
+      ansible.builtin.shell: |
+        source ./env.sh
+        printf '%s\n' "$MUTLICLUSTERID" "$MAXUSER"
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      register: lab_settings
+      changed_when: false
+
+    - name: Store lab settings
+      ansible.builtin.set_fact:
+        configured_clusters: "{{ lab_settings.stdout_lines[0].split() }}"
+        max_users: "{{ lab_settings.stdout_lines[1] | int }}"
+        user_ids: "{{ range(1, (lab_settings.stdout_lines[1] | int) + 1) | list }}"
+
+    - name: Confirm the requested cluster is configured
+      ansible.builtin.assert:
+        that:
+          - cluster_id in configured_clusters
+        fail_msg: "Cluster {{ cluster_id }} is not listed in env.sh."
+
+    - name: Confirm the active OpenShift endpoint
+      ansible.builtin.command: oc whoami --show-server
+      register: active_server
+      changed_when: false
+
+    - name: Refuse to clean a different cluster
+      ansible.builtin.assert:
+        that:
+          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+        fail_msg: "oc is connected to {{ active_server.stdout }}, not {{ cluster_id }}."
+
+    - name: Require admin access
+      ansible.builtin.command: oc whoami
+      register: active_user
+      changed_when: false
+
+    - name: Confirm admin access before cleanup
+      ansible.builtin.assert:
+        that:
+          - active_user.stdout == 'admin'
+        fail_msg: "Log in as admin before inspecting or cleaning lab VMs."
+
+    - name: Build the list of VMs that this lab registered
+      ansible.builtin.set_fact:
+        vm_targets:
+          - name: util
+            namespace: default
+
+    - name: Add each participant thesource VM to the cleanup list
+      ansible.builtin.set_fact:
+        vm_targets: "{{ vm_targets + [{'name': 'thesource', 'namespace': 'mtv-user' ~ item}] }}"
+      loop: "{{ range(1, max_users + 1) | list }}"
+
+    - name: Add each participant image-mode VM to the cleanup list
+      ansible.builtin.set_fact:
+        vm_targets: "{{ vm_targets + [{'name': 'rhel10imagemode', 'namespace': 'mtv-user' ~ item}] }}"
+      loop: "{{ range(1, max_users + 1) | list }}"
+
+    - name: Create the cluster-specific known-hosts directory
+      ansible.builtin.file:
+        path: "{{ lookup('env', 'HOME') }}/.ssh"
+        state: directory
+        mode: '0700'
+
+    - name: Inspect each VM without deleting it
+      ansible.builtin.command:
+        argv:
+          - oc
+          - get
+          - vm
+          - "{{ item.name }}"
+          - -n
+          - "{{ item.namespace }}"
+          - -o
+          - json
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ vm_targets }}"
+      loop_control:
+        label: "{{ item.namespace }}/{{ item.name }}"
+      register: vm_presence
+      changed_when: false
+      failed_when: vm_presence.rc != 0 and 'NotFound' not in vm_presence.stderr
+
+    - name: Check subscription identity for each existing VM
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - -n
+          - "{{ item.item.namespace }}"
+          - ssh
+          - --known-hosts
+          - "{{ ssh_known_hosts }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+          - -i
+          - "{{ ssh_key }}"
+          - "cloud-user@vmi/{{ item.item.name }}"
+          - -c
+          - "sudo bash -lc 'if command -v subscription-manager >/dev/null 2>&1; then subscription-manager identity; else echo RHSM_CLIENT_MISSING; fi'"
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ vm_presence.results }}"
+      loop_control:
+        label: "{{ item.item.namespace }}/{{ item.item.name }}"
+      when: item.rc == 0
+      register: identity_checks
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Reduce identity results to organization and registration status
+      ansible.builtin.set_fact:
+        subscription_states: "{{ subscription_states | default([]) + [{'target': item.item.item, 'rc': item.rc, 'org_id': (item.stdout | regex_search('org ID: [0-9]+') | default('', true)), 'not_registered': ('RHSM_CLIENT_MISSING' in item.stdout) or ('not registered' in (item.stderr | lower)) or ('not yet registered' in (item.stderr | lower)) or ('not registered' in (item.stdout | lower))}] }}"
+      loop: "{{ identity_checks.results }}"
+      loop_control:
+        label: "{{ item.item.item.namespace }}/{{ item.item.item.name }}"
+      when: not (item.skipped | default(false))
+      no_log: true
+
+    - name: Refuse to clean VMs with an unknown or different registration
+      ansible.builtin.assert:
+        that:
+          - "item.org_id == 'org ID: ' + rhsm_org_id or item.not_registered"
+        fail_msg: >-
+          {{ item.target.namespace }}/{{ item.target.name }} is not registered to the expected
+          organization or its registration could not be checked. Nothing will be deleted.
+      loop: "{{ subscription_states | default([]) }}"
+      loop_control:
+        label: "{{ item.target.namespace }}/{{ item.target.name }}"
+
+    - name: Show the dry-run subscription summary
+      ansible.builtin.debug:
+        var: subscription_states
+      when: not (confirm_cleanup | bool)
+
+    - name: Unregister VMs owned by the expected organization
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - -n
+          - "{{ item.target.namespace }}"
+          - ssh
+          - --known-hosts
+          - "{{ ssh_known_hosts }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+          - -i
+          - "{{ ssh_key }}"
+          - "cloud-user@vmi/{{ item.target.name }}"
+          - -c
+          - sudo subscription-manager unregister
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ subscription_states | default([]) }}"
+      loop_control:
+        label: "{{ item.target.namespace }}/{{ item.target.name }}"
+      when: confirm_cleanup | bool and item.rc == 0 and not item.not_registered
+      register: unregister_results
+      changed_when: true
+      no_log: true
+
+    - name: Stop running VMs before deletion to release attached volumes
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - stop
+          - "{{ item.target.name }}"
+          - -n
+          - "{{ item.target.namespace }}"
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ subscription_states | default([]) }}"
+      loop_control:
+        label: "{{ item.target.namespace }}/{{ item.target.name }}"
+      when: confirm_cleanup | bool and item.rc == 0
+      failed_when: false
+      changed_when: true
+
+    - name: Delete only the inspected VMs after unregister checks succeed
+      ansible.builtin.command:
+        argv:
+          - oc
+          - delete
+          - vm
+          - "{{ item.target.name }}"
+          - -n
+          - "{{ item.target.namespace }}"
+          - --wait=false[cite: 2]
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ subscription_states | default([]) }}"
+      loop_control:
+        label: "{{ item.target.namespace }}/{{ item.target.name }}"
+      when: confirm_cleanup | bool
+      register: delete_results
+      changed_when: true
+
+    - name: Delete DataVolumes created by each deleted lab VM
+      ansible.builtin.command:
+        argv:
+          - oc
+          - delete
+          - dv
+          - -n
+          - "{{ item.item.namespace }}"
+          - -l
+          - "kubevirt.io/created-by={{ (item.stdout | from_json).metadata.uid }}"
+          - --ignore-not-found=true
+          - --wait=false
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ vm_presence.results }}"
+      loop_control:
+        label: "{{ item.item.namespace }}/{{ item.item.name }} owned DataVolumes"
+      when: confirm_cleanup | bool and item.rc == 0
+      register: delete_owned_dv_results
+      changed_when: "'deleted' in delete_owned_dv_results.stdout"
+
+    - name: Strip finalizers from participant DataVolumes
+      ansible.builtin.command:
+        argv:
+          - oc
+          - patch
+          - dv
+          - "{{ item.1 }}"
+          - -n
+          - "mtv-user{{ item.0 }}"
+          - --type=merge
+          - -p
+          - '{"metadata":{"finalizers":[]}}'
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode']) | list }}"
+      loop_control:
+        label: "Strip finalizer mtv-user{{ item.0 }}/{{ item.1 }}"
+      when: confirm_cleanup | bool
+      failed_when: false
+      changed_when: true
+
+    - name: Delete participant DataVolumes after their VMs
+      ansible.builtin.command:
+        argv:
+          - oc
+          - delete
+          - dv
+          - "{{ item.1 }}"
+          - -n
+          - "mtv-user{{ item }}"
+          - --ignore-not-found=true
+          - --wait=false
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode']) | list }}"
+      loop_control:
+        label: "mtv-user{{ item.0 }}/{{ item.1 }}"
+      when: confirm_cleanup | bool
+      register: delete_dv_results
+      changed_when: "'deleted' in delete_dv_results.stdout"
+
+    - name: Strip finalizers from participant PVCs to prevent terminal hanging
+      ansible.builtin.command:
+        argv:
+          - oc
+          - patch
+          - pvc
+          - "{{ item.1 }}"
+          - -n
+          - "mtv-user{{ item.0 }}"
+          - --type=merge
+          - -p
+          - '{"metadata":{"finalizers":[]}}'
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode']) | list }}"
+      loop_control:
+        label: "Strip PVC finalizer mtv-user{{ item.0 }}/{{ item.1 }}"
+      when: confirm_cleanup | bool
+      failed_when: false
+      changed_when: true
+
+    - name: Delete participant PVCs left behind after DataVolume deletion
+      ansible.builtin.command:
+        argv:
+          - oc
+          - delete
+          - pvc
+          - "{{ item.1 }}"
+          - -n
+          - "mtv-user{{ item.0 }}"
+          - --ignore-not-found=true
+          - --wait=false
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode']) | list }}"
+      loop_control:
+        label: "mtv-user{{ item.0 }}/{{ item.1 }}"
+      when: confirm_cleanup | bool
+      register: delete_pvc_results
+      changed_when: "'deleted' in delete_pvc_results.stdout"
+
+    - name: Delete orphaned CDI scratch and clone PVCs
+      ansible.builtin.command:
+        argv:
+          - oc
+          - delete
+          - pvc
+          - -n
+          - "mtv-user{{ item }}"
+          - -l
+          - cdi.kubevirt.io/storage.condition.bound
+          - --ignore-not-found=true
+          - --wait=false
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_ids }}"
+      loop_control:
+        label: "CDI PVCs mtv-user{{ item }}"
+      when: confirm_cleanup | bool
+      failed_when: false
+      changed_when: true
+
+    - name: Delete participant Multus network attachments after VM cleanup
+      ansible.builtin.command:
+        argv:
+          - oc
+          - delete
+          - network-attachment-definition
+          - flatnetwork
+          - -n
+          - "mtv-user{{ item }}"
+          - --ignore-not-found=true
+          - --wait=true
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_ids }}"
+      loop_control:
+        label: "mtv-user{{ item }}/flatnetwork"
+      when: confirm_cleanup | bool
+      register: delete_nad_results
+      changed_when: "'deleted' in delete_nad_results.stdout"
+
+    - name: Delete the util route and service after util cleanup
+      ansible.builtin.command:
+        argv:
+          - oc
+          - delete
+          - "{{ item }}"
+          - httpd
+          - -n
+          - default
+          - --ignore-not-found=true
+          - --wait=false
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop:
+        - route
+        - service
+      when: confirm_cleanup | bool
+      register: delete_httpd_results
+      changed_when: "'deleted' in delete_httpd_results.stdout"
+
+    - name: Delete participant SSH secrets so 01 can recreate them
+      ansible.builtin.command:
+        argv:
+          - oc
+          - delete
+          - secret
+          - techquest
+          - -n
+          - "mtv-user{{ item }}"
+          - --ignore-not-found=true
+          - --wait=false
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_ids }}"
+      loop_control:
+        label: "mtv-user{{ item }}/techquest"
+      when: confirm_cleanup | bool
+      register: delete_participant_secrets
+      changed_when: "'deleted' in delete_participant_secrets.stdout"
+
+    - name: Delete util SSH secret so util can be recreated
+      ansible.builtin.command:
+        argv:
+          - oc
+          - delete
+          - secret
+          - techquest
+          - -n
+          - default
+          - --ignore-not-found=true
+          - --wait=false
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      when: confirm_cleanup | bool
+      register: delete_util_secret
+      changed_when: "'deleted' in delete_util_secret.stdout"

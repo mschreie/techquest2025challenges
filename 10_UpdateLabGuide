@@ -1,8 +1,21 @@
 . ./env.sh
 
+# changed: apply the cluster-specific host-key policy when connecting to util.
+vssh() {
+    local namespace=$1
+    shift
+    virtctl -n "$namespace" ssh --known-hosts "$SSH_KNOWN_HOSTS" \
+        --local-ssh-opts='-o StrictHostKeyChecking=accept-new' "$@"
+}
+
 for CLUSTERID in $MUTLICLUSTERID
 do 
     echo $CLUSTERID
+     # changed: keep different clusters' VM host keys separate
+    SSH_KNOWN_HOSTS="$HOME/.ssh/kubevirt_known_hosts-$CLUSTERID"
+    mkdir -p "$HOME/.ssh"
+    touch "$SSH_KNOWN_HOSTS"
+    chmod 600 "$SSH_KNOWN_HOSTS
     PW=ADMINPW_$CLUSTERID  
     PW=${!PW}
     echo $PW
