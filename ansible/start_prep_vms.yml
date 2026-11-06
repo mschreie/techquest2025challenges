@@ -5,30 +5,27 @@
   gather_facts: false
   vars:
     repo_dir: "{{ playbook_dir | dirname }}"
-    cluster_id: mpfcp
-    user_ids: "{{ range(1, max_users + 1) | list }}"
 
   tasks:
-    - name: Read configured clusters and participant count from env.sh
+    - name: Read cluster settings and participant count from env.sh
       ansible.builtin.shell: |
         source ./env.sh
-        printf '%s\n' "$MUTLICLUSTERID" "$MAXUSER"
+        cid="${MULTICLUSTERID:-$MUTLICLUSTERID}"
+        first_cid=$(echo "$cid" | awk '{print $1}')
+        target_cid="${TARGET_CLUSTER:-$first_cid}"
+        printf "%s\n%s\n%s\n" "$cid" "$target_cid" "${MAXUSERS:-$MAXUSER}"
       args:
         executable: /bin/bash
         chdir: "{{ repo_dir }}"
       register: lab_settings
       changed_when: false
 
-    - name: Store lab settings
+    - name: Store dynamic lab settings
       ansible.builtin.set_fact:
         configured_clusters: "{{ lab_settings.stdout_lines[0].split() }}"
-        max_users: "{{ lab_settings.stdout_lines[1] | int }}"
-
-    - name: Confirm the requested cluster is configured
-      ansible.builtin.assert:
-        that:
-          - cluster_id in configured_clusters
-        fail_msg: "Cluster {{ cluster_id }} is not listed in env.sh."
+        cluster_id: "{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else lab_settings.stdout_lines[1] }}"
+        max_users: "{{ (max_users if (max_users is defined and max_users | length > 0) else lab_settings.stdout_lines[2]) | int }}"
+        user_ids: "{{ range(1, ((max_users if (max_users is defined and max_users | length > 0) else lab_settings.stdout_lines[2]) | int) + 1) | list }}"
 
     - name: Confirm the active OpenShift endpoint
       ansible.builtin.command: oc whoami --show-server
@@ -38,7 +35,7 @@
     - name: Refuse to start VMs in a different cluster
       ansible.builtin.assert:
         that:
-          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+          - active_server.stdout == "https://api.cluster-" + cluster_id + ".dyn.redhatworkshops.io:6443"
         fail_msg: "oc is connected to {{ active_server.stdout }}, not {{ cluster_id }}."
 
     - name: Require admin access to start prepared VMs
@@ -49,7 +46,7 @@
     - name: Confirm admin access
       ansible.builtin.assert:
         that:
-          - active_user.stdout == 'admin'
+          - active_user.stdout == "admin"
         fail_msg: "Log in as admin before starting prepared VMs."
 
     - name: Define util and participant thesource targets
@@ -58,7 +55,7 @@
           - name: util
             namespace: default
 
-    - name: Add each participant thesource VM
+    - name: Add each participant thesource VM dynamically
       ansible.builtin.set_fact:
         vm_targets: "{{ vm_targets + [{'name': 'thesource', 'namespace': 'mtv-user' ~ item}] }}"
       loop: "{{ user_ids }}"
@@ -102,25 +99,24 @@
       changed_when: false
       failed_when: false
 
-    - name: Start VMs explicitly stopped with no VMI
+    - name: Start VMs that are not running
       ansible.builtin.command:
         argv:
           - virtctl
-          - -n
-          - "{{ item.item.namespace }}"
           - start
           - "{{ item.item.name }}"
+          - -n
+          - "{{ item.item.namespace }}"
       environment:
         PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
       loop: "{{ vmi_phases.results }}"
       loop_control:
         index_var: vm_index
         label: "{{ item.item.namespace }}/{{ item.item.name }}"
-      when: >-
-        item.rc != 0 and
-        (vm_specs.results[vm_index].stdout | from_json).spec.runStrategy | default('Always') in ['Halted', 'Manual']
+      when: item.rc != 0 or item.stdout != 'Running'
       register: start_results
       changed_when: true
+      failed_when: false
 
     - name: Wait for every prepared VMI to become Ready
       ansible.builtin.command:

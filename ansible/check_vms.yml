@@ -1,34 +1,104 @@
 ---
-- name: Check lab VM readiness without changing the cluster
+- name: Inspect the readiness of organizer-prepared VMs
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
-    expected_cluster_id: mpfcp
-    user_ids:
-      - 1
+    repo_dir: "{{ playbook_dir | dirname }}"
 
   tasks:
-    - name: Read the active OpenShift API server
-      ansible.builtin.command: oc whoami --show-server
-      register: current_server
+    - name: Read cluster settings and participant count from env.sh
+      ansible.builtin.shell: |
+        source ./env.sh
+        cid="${MULTICLUSTERID:-$MUTLICLUSTERID}"
+        first_cid=$(echo "$cid" | awk '{print $1}')
+        target_cid="${TARGET_CLUSTER:-$first_cid}"
+        printf "%s\n%s\n%s\n" "$cid" "$target_cid" "${MAXUSERS:-$MAXUSER}"
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      register: lab_settings
       changed_when: false
 
-    - name: Confirm the active session is for the expected cluster
+    - name: Store dynamic lab settings
+      ansible.builtin.set_fact:
+        configured_clusters: "{{ lab_settings.stdout_lines[0].split() }}"
+        cluster_id: "{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else lab_settings.stdout_lines[1] }}"
+        max_users: "{{ (max_users if (max_users is defined and max_users | length > 0) else lab_settings.stdout_lines[2]) | int }}"
+
+    - name: Confirm the active OpenShift endpoint
+      ansible.builtin.command: oc whoami --show-server
+      register: active_server
+      changed_when: false
+
+    - name: Refuse to inspect a different cluster
       ansible.builtin.assert:
         that:
-          - current_server.stdout == 'https://api.cluster-' + expected_cluster_id + '.dyn.redhatworkshops.io:6443'
-        fail_msg: >-
-          The current oc session is {{ current_server.stdout }}; expected cluster
-          {{ expected_cluster_id }}. Log in to the intended cluster before running this check.
+          - active_server.stdout == "https://api.cluster-" + cluster_id + ".dyn.redhatworkshops.io:6443"
+        fail_msg: "oc is connected to {{ active_server.stdout }}, not {{ cluster_id }}."
 
-    - name: Read VMI status for each participant namespace
-      ansible.builtin.command: oc get vmi -n mtv-user{{ item }}
-      loop: "{{ user_ids }}"
-      register: vmi_status
+    - name: Build dynamic list of organizer VM targets
+      ansible.builtin.set_fact:
+        organizer_vm_targets: >-
+          {{
+            [ {'name': 'util', 'namespace': 'default'} ] +
+            (range(1, max_users + 1) | map('format', 'thesource') | zip(range(1, max_users + 1) | map('format', 'mtv-user%s')) | map('zip', ['name', 'namespace']) | map('map', 'reverse') | map('community.general.dict' if 'community.general.dict' is filter else 'dict') | list if false else
+             [ {'name': 'util', 'namespace': 'default'} ])
+          }}
+
+    # Alternativa más legible y estándar sin filtros externos para construir los targets:
+    - name: Initialize VM targets with util
+      ansible.builtin.set_fact:
+        vm_targets:
+          - name: util
+            namespace: default
+
+    - name: Append thesource for each participant dynamically
+      ansible.builtin.set_fact:
+        vm_targets: "{{ vm_targets + [{'name': 'thesource', 'namespace': 'mtv-user' ~ item}] }}"
+      loop: "{{ range(1, max_users + 1) | list }}"
+
+    - name: Inspect the VirtualMachineInstance status for each VM
+      ansible.builtin.command:
+        argv:
+          - oc
+          - get
+          - vmi
+          - "{{ item.name }}"
+          - -n
+          - "{{ item.namespace }}"
+          - -o
+          - jsonpath={.status.phase}{"\t"}{.status.conditions[?(@.type=="Ready")].status}{"\n"}
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ vm_targets }}"
+      loop_control:
+        label: "{{ item.namespace }}/{{ item.name }}"
+      register: vmi_checks
       changed_when: false
+      failed_when: false
 
-    - name: Display the VMI status
+    - name: Display the VMI status summary
       ansible.builtin.debug:
-        msg: "{{ item.stdout }}"
-      loop: "{{ vmi_status.results }}"
+        msg: >-
+          VM {{ item.item.namespace }}/{{ item.item.name }}:
+          {% if item.rc == 0 %}
+          Phase={{ (item.stdout.split('\t')[0]) | default('Unknown') }},
+          Ready={{ (item.stdout.split('\t')[1]) | default('False') }}
+          {% else %}
+          NotFound or Error ({{ item.stderr | default('No details') }})
+          {% endif %}
+      loop: "{{ vmi_checks.results }}"
+      loop_control:
+        label: "{{ item.item.namespace }}/{{ item.item.name }}"
+
+    - name: Assert that all organizer VMs are Running and Ready
+      ansible.builtin.assert:
+        that:
+          - item.rc == 0
+          - "'Running' in item.stdout"
+          - "'True' in item.stdout"
+        fail_msg: "VM {{ item.item.namespace }}/{{ item.item.name }} is not running or ready!"
+      loop: "{{ vmi_checks.results }}"
+      loop_control:
+        label: "{{ item.item.namespace }}/{{ item.item.name }}"

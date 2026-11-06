@@ -1,42 +1,44 @@
 ---
-- name: Add flatnetwork to the image-mode VM
+- name: Configure flatnetwork Multus interface on participant image-mode VMs
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
     repo_dir: "{{ playbook_dir | dirname }}"
-    cluster_id: mpfcp
-    vm_namespace: mtv-user1
-    vm_name: rhel10imagemode
-    confirm_restart: false
-    network_patch:
-      spec:
-        template:
-          spec:
-            domain:
-              devices:
-                interfaces:
-                  - name: default
-                    masquerade: {}
-                  - name: nic-flat
-                    bridge: {}
-            networks:
-              - name: default
-                pod: {}
-              - name: nic-flat
-                multus:
-                  networkName: flatnetwork
 
   tasks:
+    - name: Read cluster settings and participant count from env.sh
+      ansible.builtin.shell: |
+        source ./env.sh
+        cid="${MULTICLUSTERID:-$MUTLICLUSTERID}"
+        first_cid=$(echo "$cid" | awk '{print $1}')
+        target_cid="${TARGET_CLUSTER:-$first_cid}"
+        printf "%s\n%s\n%s\n" "$cid" "$target_cid" "${MAXUSERS:-$MAXUSER}"
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      register: lab_settings
+      changed_when: false
+
+    - name: Store dynamic lab settings
+      ansible.builtin.set_fact:
+        configured_clusters: "{{ lab_settings.stdout_lines[0].split() }}"
+        cluster_id: "{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else lab_settings.stdout_lines[1] }}"
+        max_users: "{{ (max_users if (max_users is defined and max_users | length > 0) else lab_settings.stdout_lines[2]) | int }}"
+
+    - name: Compute user project list dynamically
+      ansible.builtin.set_fact:
+        user_namespaces: "{{ q('sequence', 'start=1 count=' ~ max_users ~ ' format=mtv-user%d') }}"
+
     - name: Confirm the active OpenShift endpoint
       ansible.builtin.command: oc whoami --show-server
       register: active_server
       changed_when: false
 
-    - name: Refuse to modify a different cluster
+    - name: Refuse to configure a different cluster
       ansible.builtin.assert:
         that:
-          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+          - active_server.stdout == "https://api.cluster-" + cluster_id + ".dyn.redhatworkshops.io:6443"
         fail_msg: "oc is connected to {{ active_server.stdout }}, not {{ cluster_id }}."
 
     - name: Require admin access
@@ -47,10 +49,10 @@
     - name: Confirm admin access
       ansible.builtin.assert:
         that:
-          - active_user.stdout == 'admin'
-        fail_msg: "Log in as admin before modifying the image-mode VM network."
+          - active_user.stdout == "admin"
+        fail_msg: "Log in as admin before configuring network interfaces."
 
-    - name: Confirm flatnetwork exists in the participant project
+    - name: Check if flatnetwork NetworkAttachmentDefinition exists in each namespace
       ansible.builtin.command:
         argv:
           - oc
@@ -58,116 +60,132 @@
           - network-attachment-definition
           - flatnetwork
           - -n
-          - "{{ vm_namespace }}"
+          - "{{ item }}"
+          - -o
+          - name
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_namespaces }}"
+      register: nad_presence
       changed_when: false
+      failed_when: false
 
-    - name: Read image-mode VM network template
+    - name: Ensure flatnetwork NetworkAttachmentDefinition is created if missing
+      ansible.builtin.command:
+        argv:
+          - oc
+          - create
+          - -f
+          - -
+          - -n
+          - "{{ item.item }}"
+      args:
+        stdin: |
+          apiVersion: "k8s.cni.cncf.io/v1"
+          kind: NetworkAttachmentDefinition
+          metadata:
+            name: flatnetwork
+          spec:
+            config: '{
+              "cniVersion": "0.3.1",
+              "name": "flatnetwork",
+              "type": "macvlan",
+              "master": "br-ex",
+              "mode": "bridge",
+              "ipam": {
+                "type": "whereabouts",
+                "range": "192.168.113.0/24"
+              }
+            }'
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ nad_presence.results }}"
+      when: item.rc != 0
+      changed_when: true
+
+    - name: Check if rhel10imagemode VM exists in each participant namespace
       ansible.builtin.command:
         argv:
           - oc
           - get
           - vm
-          - "{{ vm_name }}"
+          - rhel10imagemode
           - -n
-          - "{{ vm_namespace }}"
+          - "{{ item }}"
           - -o
           - json
-      register: vm_definition
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ user_namespaces }}"
+      register: vm_presence
       changed_when: false
+      failed_when: false
 
-    - name: Determine whether nic-flat is missing
-      ansible.builtin.set_fact:
-        vm_network_names: "{{ (vm_definition.stdout | from_json).spec.template.spec.networks | default([]) | map(attribute='name') | list }}"
-        vm_interface_names: "{{ (vm_definition.stdout | from_json).spec.template.spec.domain.devices.interfaces | default([]) | map(attribute='name') | list }}"
-
-    - name: Record whether the VM template needs Multus
-      ansible.builtin.set_fact:
-        needs_multus: "{{ 'nic-flat' not in vm_network_names or 'nic-flat' not in vm_interface_names }}"
-
-    - name: Require explicit restart approval if the template needs a network change
-      ansible.builtin.assert:
-        that:
-          - confirm_restart | bool
-        fail_msg: >-
-          The VM needs nic-flat added. Re-run with -e confirm_restart=true to apply the
-          template change and restart rhel10imagemode.
-      when: needs_multus
-
-    - name: Add the default and flat interfaces to the VM template
+    - name: Patch nic-flat network interface and Multus network into existing rhel10imagemode VMs
       ansible.builtin.command:
         argv:
           - oc
           - patch
           - vm
-          - "{{ vm_name }}"
+          - rhel10imagemode
           - -n
-          - "{{ vm_namespace }}"
+          - "{{ item.item }}"
           - --type=merge
           - -p
-          - "{{ network_patch | to_json }}"
-      when: needs_multus
-      changed_when: true
+          - >-
+            {
+              "spec": {
+                "template": {
+                  "spec": {
+                    "domain": {
+                      "devices": {
+                        "interfaces": [
+                          {
+                            "name": "default",
+                            "masquerade": {}
+                          },
+                          {
+                            "name": "nic-flat",
+                            "bridge": {}
+                          }
+                        ]
+                      }
+                    },
+                    "networks": [
+                      {
+                        "name": "default",
+                        "pod": {}
+                      },
+                      {
+                        "name": "nic-flat",
+                        "multus": {
+                          "networkName": "flatnetwork"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+      environment:
+        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+      loop: "{{ vm_presence.results }}"
+      when: item.rc == 0
+      register: patch_results
+      changed_when: "'patched' in patch_results.stdout"
 
-    - name: Stop the VM so the new interface is applied
+    - name: Restart rhel10imagemode VM to apply secondary network interface
       ansible.builtin.command:
         argv:
           - virtctl
-          - stop
-          - "{{ vm_name }}"
+          - restart
+          - rhel10imagemode
           - -n
-          - "{{ vm_namespace }}"
+          - "{{ item.item }}"
       environment:
         PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-      when: needs_multus
+      loop: "{{ patch_results.results | default([]) }}"
+      when:
+        - not (item.skipped | default(false))
+        - item.changed | default(false)
       changed_when: true
-
-    - name: Wait for the old VMI to stop
-      ansible.builtin.command:
-        argv:
-          - oc
-          - wait
-          - --for=delete
-          - "vmi/{{ vm_name }}"
-          - -n
-          - "{{ vm_namespace }}"
-          - --timeout=5m
-      when: needs_multus
-      changed_when: false
-
-    - name: Start the VM with the updated network
-      ansible.builtin.command:
-        argv:
-          - virtctl
-          - start
-          - "{{ vm_name }}"
-          - -n
-          - "{{ vm_namespace }}"
-      environment:
-        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-      when: needs_multus
-      changed_when: true
-
-    - name: Wait until the image-mode VMI is Ready
-      ansible.builtin.command:
-        argv:
-          - oc
-          - wait
-          - --for=condition=Ready
-          - "vmi/{{ vm_name }}"
-          - -n
-          - "{{ vm_namespace }}"
-          - --timeout=10m
-      changed_when: false
-
-    - name: Show the VMI interface addresses
-      ansible.builtin.command: oc get vmi rhel10imagemode -n mtv-user1 -o json
-      register: vmi_interfaces
-      changed_when: false
-
-    - name: Extract interface names and IP addresses
-      ansible.builtin.set_fact:
-        assigned_interfaces: "{{ (vmi_interfaces.stdout | from_json).status.interfaces | default([]) }}"
-
-    - name: Display assigned interface addresses
-      ansible.builtin.debug:
-        var: assigned_interfaces

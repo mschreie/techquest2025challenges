@@ -12,16 +12,17 @@
       private: true
   vars:
     repo_dir: "{{ playbook_dir | dirname }}"
-    cluster_id: mpfcp
     ssh_key: "{{ lookup('env', 'HOME') }}/.ssh/id_techquest"
-    ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id }}"
 
   tasks:
-    - name: Read cluster ID and admin password from env.sh
+    - name: Read cluster settings and admin password dynamically from env.sh
       ansible.builtin.shell: |
         source ./env.sh
-        pw_name="ADMINPW_{{ cluster_id }}"
-        printf '%s\n' "$MUTLICLUSTERID" "${!pw_name}"
+        cid="${MULTICLUSTERID:-$MUTLICLUSTERID}"
+        first_cid=$(echo "$cid" | awk '{print $1}')
+        target_cid="${TARGET_CLUSTER:-$first_cid}"
+        pw_name="ADMINPW_${target_cid}"
+        printf "%s\n%s\n%s\n" "$cid" "$target_cid" "${!pw_name}"
       args:
         executable: /bin/bash
         chdir: "{{ repo_dir }}"
@@ -32,8 +33,10 @@
     - name: Store protected runtime values
       ansible.builtin.set_fact:
         configured_clusters: "{{ cluster_credentials.stdout_lines[0].split() }}"
-        admin_password: "{{ cluster_credentials.stdout_lines[1] }}"
-        registry_input: "{{ cluster_id }}\n{{ cluster_credentials.stdout_lines[1] }}\n{{ registry_user }}\n{{ registry_token }}"
+        cluster_id: "{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else cluster_credentials.stdout_lines[1] }}"
+        admin_password: "{{ cluster_credentials.stdout_lines[2] }}"
+        ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else cluster_credentials.stdout_lines[1] }}"
+        registry_input: "{{ cluster_credentials.stdout_lines[1] }}\n{{ cluster_credentials.stdout_lines[2] }}\n{{ registry_user }}\n{{ registry_token }}"
       no_log: true
 
     - name: Confirm the requested cluster is configured
@@ -50,7 +53,7 @@
     - name: Confirm this play targets the current cluster
       ansible.builtin.assert:
         that:
-          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+          - active_server.stdout == "https://api.cluster-" + cluster_id + ".dyn.redhatworkshops.io:6443"
         fail_msg: "oc is connected to {{ active_server.stdout }}, not {{ cluster_id }}."
 
     - name: Require admin access to push to the internal registry
@@ -61,7 +64,7 @@
     - name: Confirm admin access
       ansible.builtin.assert:
         that:
-          - active_user.stdout == 'admin'
+          - active_user.stdout == "admin"
         fail_msg: "Log in as admin before copying images to the shared openshift project."
 
     - name: Copy the current prepRegistry script to util
@@ -73,7 +76,9 @@
           - scp
           - --known-hosts
           - "{{ ssh_known_hosts }}"
-          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+          - --local-ssh-opts=-o StrictHostKeyChecking=no
+          - --local-ssh-opts=-o UserKnownHostsFile=/dev/null
+          - --local-ssh-opts=-o LogLevel=ERROR
           - -i
           - "{{ ssh_key }}"
           - "{{ repo_dir }}/prepRegistry.sh"
@@ -91,7 +96,9 @@
           - ssh
           - --known-hosts
           - "{{ ssh_known_hosts }}"
-          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+          - --local-ssh-opts=-o StrictHostKeyChecking=no
+          - --local-ssh-opts=-o UserKnownHostsFile=/dev/null
+          - --local-ssh-opts=-o LogLevel=ERROR
           - -i
           - "{{ ssh_key }}"
           - cloud-user@vmi/util

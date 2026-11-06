@@ -5,49 +5,45 @@
   gather_facts: false
   vars:
     repo_dir: "{{ playbook_dir | dirname }}"
-    cluster_id: mpfcp
-    user_ids: "{{ range(1, max_users + 1) | list }}"
     ssh_key: "{{ lookup('env', 'HOME') }}/.ssh/id_techquest"
-    ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id }}"
     zip_local_path: "{{ repo_dir }}/files/rhel_image_mode-main.zip"
     zip_remote_path: /home/cloud-user/rhel_image_mode-main.zip
     workdir_remote: /root/rhel_image_mode-main
 
   tasks:
-    - name: Read configured clusters and participant count from env.sh
+    - name: Read cluster settings and participant count from env.sh
       ansible.builtin.shell: |
         source ./env.sh
-        printf '%s\n' "$MUTLICLUSTERID" "$MAXUSER"
+        cid="${MULTICLUSTERID:-$MUTLICLUSTERID}"
+        first_cid=$(echo "$cid" | awk '{print $1}')
+        target_cid="${TARGET_CLUSTER:-$first_cid}"
+        printf "%s\n%s\n%s\n" "$cid" "$target_cid" "${MAXUSERS:-$MAXUSER}"
       args:
         executable: /bin/bash
         chdir: "{{ repo_dir }}"
       register: lab_settings
       changed_when: false
 
-    - name: Store lab settings
+    - name: Store dynamic lab settings
       ansible.builtin.set_fact:
         configured_clusters: "{{ lab_settings.stdout_lines[0].split() }}"
-        max_users: "{{ lab_settings.stdout_lines[1] | int }}"
-      no_log: true
-
-    - name: Confirm the requested cluster is configured
-      ansible.builtin.assert:
-        that:
-          - cluster_id in configured_clusters
-        fail_msg: "Cluster {{ cluster_id }} is not listed in env.sh."
+        cluster_id: "{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else lab_settings.stdout_lines[1] }}"
+        max_users: "{{ (max_users if (max_users is defined and max_users | length > 0) else lab_settings.stdout_lines[2]) | int }}"
+        user_ids: "{{ range(1, ((max_users if (max_users is defined and max_users | length > 0) else lab_settings.stdout_lines[2]) | int) + 1) | list }}"
+        ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else lab_settings.stdout_lines[1] }}"
 
     - name: Confirm the active OpenShift endpoint
       ansible.builtin.command: oc whoami --show-server
       register: active_server
       changed_when: false
 
-    - name: Refuse to prepare VMs in a different cluster
+    - name: Refuse to prepare a different cluster
       ansible.builtin.assert:
         that:
-          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+          - active_server.stdout == "https://api.cluster-" + cluster_id + ".dyn.redhatworkshops.io:6443"
         fail_msg: "oc is connected to {{ active_server.stdout }}, not {{ cluster_id }}."
 
-    - name: Require admin access to prepare all participant projects
+    - name: Require admin access
       ansible.builtin.command: oc whoami
       register: active_user
       changed_when: false
@@ -55,35 +51,22 @@
     - name: Confirm admin access
       ansible.builtin.assert:
         that:
-          - active_user.stdout == 'admin'
-        fail_msg: "Log in as admin before preparing multiple participant VMs."
+          - active_user.stdout == "admin"
+        fail_msg: "Log in as admin before preparing thesource VMs."
 
-    - name: Create the cluster-specific known-hosts file
-      ansible.builtin.file:
-        path: "{{ lookup('env', 'HOME') }}/.ssh"
-        state: directory
-        mode: '0700'
-
-    - name: Inspect the known-hosts file
+    - name: Compute sha256 checksum of local lab zip
       ansible.builtin.stat:
-        path: "{{ ssh_known_hosts }}"
-      register: known_hosts_stat
+        path: "{{ zip_local_path }}"
+        checksum_algorithm: sha256
+      register: local_zip_stat
 
-    - name: Create or secure the known-hosts file only when necessary
-      ansible.builtin.file:
-        path: "{{ ssh_known_hosts }}"
-        state: touch
-        mode: '0600'
-        access_time: preserve
-        modification_time: preserve
-      when: not known_hosts_stat.stat.exists or known_hosts_stat.stat.mode != '0600'
+    - name: Fail if the local lab zip does not exist
+      ansible.builtin.assert:
+        that:
+          - local_zip_stat.stat.exists
+        fail_msg: "Local zip {{ zip_local_path }} does not exist."
 
-    - name: Calculate the local lab ZIP checksum
-      ansible.builtin.command: sha256sum "{{ zip_local_path }}"
-      register: local_zip_checksum
-      changed_when: false
-
-    - name: Check SSH access and the ZIP checksum on each thesource
+    - name: Check if the lab zip already exists on each thesource VM
       ansible.builtin.command:
         argv:
           - virtctl
@@ -97,7 +80,7 @@
           - "{{ ssh_key }}"
           - cloud-user@vmi/thesource
           - -c
-          - "sha256sum {{ zip_remote_path }}"
+          - "sha256sum {{ zip_remote_path }} 2>/dev/null || echo MISSING"
       environment:
         PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
       loop: "{{ user_ids }}"
@@ -106,13 +89,14 @@
       register: remote_zip_checks
       changed_when: false
       failed_when: false
+      no_log: true
 
-    - name: Copy the ZIP only when missing or different
+    - name: Copy lab zip to thesource VMs when missing or checksum differs
       ansible.builtin.command:
         argv:
           - virtctl
           - -n
-          - "mtv-user{{ item }}"
+          - "mtv-user{{ item.item }}"
           - scp
           - --known-hosts
           - "{{ ssh_known_hosts }}"
@@ -120,21 +104,16 @@
           - -i
           - "{{ ssh_key }}"
           - "{{ zip_local_path }}"
-          - "cloud-user@vmi/thesource:."
+          - "cloud-user@vmi/thesource:{{ zip_remote_path }}"
       environment:
         PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-      loop: "{{ user_ids }}"
+      loop: "{{ remote_zip_checks.results }}"
       loop_control:
-        index_var: user_index
-        label: "mtv-user{{ item }}"
-      when: >-
-        remote_zip_checks.results[user_index].rc != 0 or
-        (remote_zip_checks.results[user_index].stdout.split() | first | default('')) !=
-        (local_zip_checksum.stdout.split() | first)
-      register: zip_copy
+        label: "mtv-user{{ item.item }}"
+      when: local_zip_stat.stat.checksum not in item.stdout
       changed_when: true
 
-    - name: Check whether the root work directory is prepared
+    - name: Extract lab zip into root workdir if directory does not exist
       ansible.builtin.command:
         argv:
           - virtctl
@@ -148,17 +127,15 @@
           - "{{ ssh_key }}"
           - cloud-user@vmi/thesource
           - -c
-          - "sudo test -f {{ workdir_remote }}/Containerfile && sudo test -d {{ workdir_remote }}/output"
+          - "sudo bash -lc 'if [ ! -d {{ workdir_remote }} ]; then mkdir -p /root && unzip -q -o {{ zip_remote_path }} -d /root; fi'"
       environment:
         PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
       loop: "{{ user_ids }}"
       loop_control:
         label: "mtv-user{{ item }}"
-      register: workdir_checks
-      changed_when: false
-      failed_when: false
+      changed_when: true
 
-    - name: Extract the ZIP only when the work directory is missing
+    - name: Ensure CLI binaries oc and virtctl are installed in /usr/local/bin
       ansible.builtin.command:
         argv:
           - virtctl
@@ -173,77 +150,19 @@
           - cloud-user@vmi/thesource
           - -c
           - >-
-            sudo bash -lc 'if [ ! -f {{ workdir_remote }}/Containerfile ]; then
-            unzip -oq {{ zip_remote_path }} -d /root &&
-            rm -f {{ workdir_remote }}/README.md; fi;
-            mkdir -p {{ workdir_remote }}/output'
+            sudo bash -lc '
+            for bin in oc virtctl; do
+              if ! command -v $bin >/dev/null 2>&1; then
+                if [ -f {{ workdir_remote }}/$bin ]; then
+                  install -m 0755 {{ workdir_remote }}/$bin /usr/local/bin/$bin
+                elif [ -f /home/cloud-user/$bin ]; then
+                  install -m 0755 /home/cloud-user/$bin /usr/local/bin/$bin
+                fi
+              fi
+            done'
       environment:
         PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
       loop: "{{ user_ids }}"
       loop_control:
-        index_var: user_index
         label: "mtv-user{{ item }}"
-      when: workdir_checks.results[user_index].rc != 0
-      register: extraction
       changed_when: true
-
-    - name: Check whether oc and virtctl are installed in each VM
-      ansible.builtin.command:
-        argv:
-          - virtctl
-          - -n
-          - "mtv-user{{ item }}"
-          - ssh
-          - --known-hosts
-          - "{{ ssh_known_hosts }}"
-          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
-          - -i
-          - "{{ ssh_key }}"
-          - cloud-user@vmi/thesource
-          - -c
-          - "sudo test -x /usr/local/bin/oc && sudo test -x /usr/local/bin/virtctl"
-      environment:
-        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-      loop: "{{ user_ids }}"
-      loop_control:
-        label: "mtv-user{{ item }}"
-      register: tool_checks
-      changed_when: false
-      failed_when: false
-
-    - name: Install missing oc and virtctl binaries
-      ansible.builtin.command:
-        argv:
-          - virtctl
-          - -n
-          - "mtv-user{{ item }}"
-          - ssh
-          - --known-hosts
-          - "{{ ssh_known_hosts }}"
-          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
-          - -i
-          - "{{ ssh_key }}"
-          - cloud-user@vmi/thesource
-          - -c
-          - >-
-            sudo bash -lc 'set -e;
-            if [ ! -x /usr/local/bin/oc ]; then
-            curl -fL -o /tmp/oc.tar https://downloads-openshift-console.apps.cluster-{{ cluster_id }}.dyn.redhatworkshops.io/amd64/linux/oc.tar;
-            tar xf /tmp/oc.tar -C /usr/local/bin; fi;
-            if [ ! -x /usr/local/bin/virtctl ]; then
-            curl -fL -o /tmp/virtctl.tar.gz https://hyperconverged-cluster-cli-download-openshift-cnv.apps.cluster-{{ cluster_id }}.dyn.redhatworkshops.io/amd64/linux/virtctl.tar.gz;
-            tar xzf /tmp/virtctl.tar.gz -C /usr/local/bin; fi;
-            chmod 0755 /usr/local/bin/oc /usr/local/bin/virtctl;
-            restorecon /usr/local/bin/oc /usr/local/bin/virtctl;
-            grep -qxF "export PATH=/usr/local/bin:\$PATH" /root/.bash_profile ||
-            echo "export PATH=/usr/local/bin:\$PATH" >> /root/.bash_profile;
-            echo TOOLS_READY'
-      environment:
-        PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-      loop: "{{ user_ids }}"
-      loop_control:
-        index_var: user_index
-        label: "mtv-user{{ item }}"
-      when: tool_checks.results[user_index].rc != 0
-      register: tool_install
-      changed_when: "'TOOLS_READY' in tool_install.stdout"

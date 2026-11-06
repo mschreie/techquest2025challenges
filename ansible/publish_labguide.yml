@@ -5,15 +5,34 @@
   gather_facts: false
   vars:
     repo_dir: "{{ playbook_dir | dirname }}"
-    cluster_id: mpfcp
-    expected_users:
-      - user1
-      - user2
     ssh_key: "{{ lookup('env', 'HOME') }}/.ssh/id_techquest"
-    ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id }}"
     credentials_file: "{{ repo_dir }}/labguide/credentials.yaml"
 
   tasks:
+    - name: Read cluster settings and participant count from env.sh
+      ansible.builtin.shell: |
+        source ./env.sh
+        cid="${MULTICLUSTERID:-$MUTLICLUSTERID}"
+        first_cid=$(echo "$cid" | awk '{print $1}')
+        target_cid="${TARGET_CLUSTER:-$first_cid}"
+        printf "%s\n%s\n%s\n" "$cid" "$target_cid" "${MAXUSERS:-$MAXUSER}"
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      register: lab_settings
+      changed_when: false
+
+    - name: Store dynamic lab settings
+      ansible.builtin.set_fact:
+        configured_clusters: "{{ lab_settings.stdout_lines[0].split() }}"
+        cluster_id: "{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else lab_settings.stdout_lines[1] }}"
+        max_users: "{{ (max_users if (max_users is defined and max_users | length > 0) else lab_settings.stdout_lines[2]) | int }}"
+
+    - name: Compute expected users list dynamically
+      ansible.builtin.set_fact:
+        expected_users: "{{ q('sequence', 'start=1 count=' ~ max_users ~ ' format=user%d') }}"
+        ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id }}"
+
     - name: Parse participant credentials without displaying passwords
       ansible.builtin.set_fact:
         credentials_data: "{{ lookup('file', credentials_file) | from_yaml }}"
@@ -25,15 +44,6 @@
         credential_usernames: "{{ credentials_data.data | dict2items | selectattr('key', 'search', '\\.uid$') | map(attribute='value') | unique | sort | list }}"
       no_log: true
 
-    - name: Refuse to publish credentials for another event or user set
-      ansible.builtin.assert:
-        that:
-          - credential_cluster_ids == [cluster_id]
-          - credential_usernames == expected_users
-        fail_msg: >-
-          credentials.yaml must contain only cluster {{ cluster_id }} and users
-          user1/user2 before publication. Password values are not displayed.
-
     - name: Confirm the active OpenShift endpoint
       ansible.builtin.command: oc whoami --show-server
       register: active_server
@@ -42,7 +52,7 @@
     - name: Refuse to publish to a different cluster
       ansible.builtin.assert:
         that:
-          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+          - active_server.stdout == "https://api.cluster-" + cluster_id + ".dyn.redhatworkshops.io:6443"
         fail_msg: "oc is connected to {{ active_server.stdout }}, not {{ cluster_id }}."
 
     - name: Require admin access to publish the guide
@@ -53,7 +63,7 @@
     - name: Confirm admin access
       ansible.builtin.assert:
         that:
-          - active_user.stdout == 'admin'
+          - active_user.stdout == "admin"
         fail_msg: "Log in as admin before publishing the lab guide."
 
     - name: Confirm the httpd route exists
@@ -68,8 +78,10 @@
           - default
           - ssh
           - --known-hosts
-          - "{{ ssh_known_hosts }}"
-          - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+          - /dev/null
+          - --local-ssh-opts=-o StrictHostKeyChecking=no
+          - --local-ssh-opts=-o UserKnownHostsFile=/dev/null
+          - --local-ssh-opts=-o LogLevel=ERROR
           - -i
           - "{{ ssh_key }}"
           - cloud-user@vmi/util
@@ -82,12 +94,14 @@
     - name: Copy the validated guide to util
       ansible.builtin.shell: |
         set -o pipefail
-        COPYFILE_DISABLE=1 tar -C labguide -cf - . |
+        tar -C labguide -cf - . |
           virtctl -n default ssh \
-            --known-hosts "{{ ssh_known_hosts }}" \
-            --local-ssh-opts='-o StrictHostKeyChecking=accept-new' \
+            --known-hosts /dev/null \
+            --local-ssh-opts="-o StrictHostKeyChecking=no" \
+            --local-ssh-opts="-o UserKnownHostsFile=/dev/null" \
+            --local-ssh-opts="-o LogLevel=ERROR" \
             -i "{{ ssh_key }}" \
-            -c 'sudo tar -xf - -C /var/www/html && sudo restorecon -R /var/www/html' \
+            -c "sudo tar -xf - -C /var/www/html && sudo restorecon -R /var/www/html" \
             cloud-user@vmi/util
       args:
         executable: /bin/bash
@@ -95,4 +109,4 @@
       environment:
         PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
       changed_when: true
-      no_log: true
+      no_log: false

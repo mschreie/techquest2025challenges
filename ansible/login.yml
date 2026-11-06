@@ -5,14 +5,16 @@
   gather_facts: false
   vars:
     repo_dir: "{{ playbook_dir | dirname }}"
-    cluster_id: mpfcp
 
   tasks:
-    - name: Read configured clusters and admin password from env.sh
+    - name: Read configured clusters and dynamic admin password from env.sh
       ansible.builtin.shell: |
         source ./env.sh
-        pw_name="ADMINPW_{{ cluster_id }}"
-        printf '%s\n' "$MUTLICLUSTERID" "${!pw_name}"
+        cid="${MULTICLUSTERID:-$MUTLICLUSTERID}"
+        first_cid=$(echo "$cid" | awk "{print \$1}")
+        target_cid="${TARGET_CLUSTER:-$first_cid}"
+        pw_name="ADMINPW_${target_cid}"
+        printf "%s\n%s\n%s\n" "$cid" "$target_cid" "${!pw_name}"
       args:
         executable: /bin/bash
         chdir: "{{ repo_dir }}"
@@ -20,10 +22,11 @@
       changed_when: false
       no_log: true
 
-    - name: Store protected login values
+    - name: Store dynamic login values
       ansible.builtin.set_fact:
         configured_clusters: "{{ login_settings.stdout_lines[0].split() }}"
-        admin_password: "{{ login_settings.stdout_lines[1] }}"
+        cluster_id: "{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else login_settings.stdout_lines[1] }}"
+        admin_password: "{{ login_settings.stdout_lines[2] }}"
       no_log: true
 
     - name: Confirm the requested cluster is configured
@@ -48,12 +51,12 @@
       changed_when: true
       no_log: true
 
-    - name: Verify the active API server
+    - name: Confirm active session identity
       ansible.builtin.command: oc whoami --show-server
       register: active_server
       changed_when: false
 
-    - name: Verify the active identity
+    - name: Confirm active session user
       ansible.builtin.command: oc whoami
       register: active_user
       changed_when: false
@@ -61,6 +64,6 @@
     - name: Confirm login reached the requested cluster as admin
       ansible.builtin.assert:
         that:
-          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
-          - active_user.stdout == 'admin'
+          - active_server.stdout == "https://api.cluster-" + cluster_id + ".dyn.redhatworkshops.io:6443"
+          - active_user.stdout == "admin"
         fail_msg: "The active OpenShift session is not admin on cluster {{ cluster_id }}."

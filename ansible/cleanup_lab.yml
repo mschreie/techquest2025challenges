@@ -5,34 +5,31 @@
   gather_facts: false
   vars:
     repo_dir: "{{ playbook_dir | dirname }}"
-    cluster_id: mpfcp
     rhsm_org_id: "11009103"
     confirm_cleanup: false
     ssh_key: "{{ lookup('env', 'HOME') }}/.ssh/id_techquest"
-    ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id }}"
 
   tasks:
-    - name: Read configured clusters and participant count from env.sh
+    - name: Read cluster settings and participant count from env.sh
       ansible.builtin.shell: |
         source ./env.sh
-        printf '%s\n' "$MUTLICLUSTERID" "$MAXUSER"
+        cid="${MULTICLUSTERID:-$MUTLICLUSTERID}"
+        first_cid=$(echo "$cid" | awk '{print $1}')
+        target_cid="${TARGET_CLUSTER:-$first_cid}"
+        printf "%s\n%s\n%s\n" "$cid" "$target_cid" "${MAXUSERS:-$MAXUSER}"
       args:
         executable: /bin/bash
         chdir: "{{ repo_dir }}"
       register: lab_settings
       changed_when: false
 
-    - name: Store lab settings
+    - name: Store dynamic lab settings
       ansible.builtin.set_fact:
         configured_clusters: "{{ lab_settings.stdout_lines[0].split() }}"
-        max_users: "{{ lab_settings.stdout_lines[1] | int }}"
-        user_ids: "{{ range(1, (lab_settings.stdout_lines[1] | int) + 1) | list }}"
-
-    - name: Confirm the requested cluster is configured
-      ansible.builtin.assert:
-        that:
-          - cluster_id in configured_clusters
-        fail_msg: "Cluster {{ cluster_id }} is not listed in env.sh."
+        cluster_id: "{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else lab_settings.stdout_lines[1] }}"
+        max_users: "{{ (max_users if (max_users is defined and max_users | length > 0) else lab_settings.stdout_lines[2]) | int }}"
+        user_ids: "{{ range(1, ((max_users if (max_users is defined and max_users | length > 0) else lab_settings.stdout_lines[2]) | int) + 1) | list }}"
+        ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id if (cluster_id is defined and cluster_id | length > 0) else lab_settings.stdout_lines[1] }}"
 
     - name: Confirm the active OpenShift endpoint
       ansible.builtin.command: oc whoami --show-server
@@ -42,7 +39,7 @@
     - name: Refuse to clean a different cluster
       ansible.builtin.assert:
         that:
-          - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+          - active_server.stdout == "https://api.cluster-" + cluster_id + ".dyn.redhatworkshops.io:6443"
         fail_msg: "oc is connected to {{ active_server.stdout }}, not {{ cluster_id }}."
 
     - name: Require admin access
@@ -53,7 +50,7 @@
     - name: Confirm admin access before cleanup
       ansible.builtin.assert:
         that:
-          - active_user.stdout == 'admin'
+          - active_user.stdout == "admin"
         fail_msg: "Log in as admin before inspecting or cleaning lab VMs."
 
     - name: Build the list of VMs that this lab registered
@@ -65,18 +62,18 @@
     - name: Add each participant thesource VM to the cleanup list
       ansible.builtin.set_fact:
         vm_targets: "{{ vm_targets + [{'name': 'thesource', 'namespace': 'mtv-user' ~ item}] }}"
-      loop: "{{ range(1, max_users + 1) | list }}"
+      loop: "{{ user_ids }}"
 
     - name: Add each participant image-mode VM to the cleanup list
       ansible.builtin.set_fact:
         vm_targets: "{{ vm_targets + [{'name': 'rhel10imagemode', 'namespace': 'mtv-user' ~ item}] }}"
-      loop: "{{ range(1, max_users + 1) | list }}"
+      loop: "{{ user_ids }}"
 
     - name: Create the cluster-specific known-hosts directory
       ansible.builtin.file:
         path: "{{ lookup('env', 'HOME') }}/.ssh"
         state: directory
-        mode: '0700'
+        mode: "0700"
 
     - name: Inspect each VM without deleting it
       ansible.builtin.command:
@@ -200,7 +197,7 @@
           - "{{ item.target.name }}"
           - -n
           - "{{ item.target.namespace }}"
-          - --wait=false[cite: 2]
+          - --wait=false
       environment:
         PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
       loop: "{{ subscription_states | default([]) }}"
@@ -260,7 +257,7 @@
           - dv
           - "{{ item.1 }}"
           - -n
-          - "mtv-user{{ item }}"
+          - "mtv-user{{ item.0 }}"
           - --ignore-not-found=true
           - --wait=false
       environment:
@@ -344,7 +341,7 @@
           - -n
           - "mtv-user{{ item }}"
           - --ignore-not-found=true
-          - --wait=true
+          - --wait=false
       environment:
         PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
       loop: "{{ user_ids }}"
