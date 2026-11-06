@@ -1,3 +1,20 @@
+# TODOs
+- Number Playbooks (00, 01,...) - Aina 
+- Test Playbooks - Markus
+- Decide on Playbooks / Scripts - Markus
+- Prepare Image Mode VM - As emergency if Step 1 cannot be completed - ASAP - Playbook schreiben - Aina
+- Credentials in Lab Guide
+- Improve Lab Guide 
+- Document tiny-URL / QR Code: https://mo-hub.apps.int.spoke.prod.us-east-1.aws.paas.redhat.com/ (needs VPN)
+- Mention Daniel's Lab in our presentation
+- Try multi-cluster
+
+# TODOs before LAB starts
+- Tiny-URL / QR Code: https://mo-hub.apps.int.spoke.prod.us-east-1.aws.paas.redhat.com/
+- Multi-cluster
+- Run Playbooks
+
+
 # List of things to improve or to change
 
 NEW ISSUES:
