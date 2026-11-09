@@ -1,0 +1,45 @@
+---
+- name: Build registry script input for this cluster
+  ansible.builtin.set_fact:
+    registry_input: "{{ cluster_id }}\n{{ admin_password }}\n{{ registry_user }}\n{{ registry_token }}"
+  no_log: true
+
+- name: Copy the current prepRegistry script to util
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - default
+      - scp
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - "{{ repo_dir }}/prepRegistry.sh"
+      - cloud-user@vmi/util:prepRegistry.sh
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  changed_when: true
+
+- name: Pull and push the required images
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - default
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/util
+      - -c
+      - "bash -c 'IFS= read -r CLUSTERID; IFS= read -r ADMIN_PW; IFS= read -r REGISTRY_USER; IFS= read -r MYPW; export CLUSTERID ADMIN_PW REGISTRY_USER MYPW; bash ~/prepRegistry.sh'"
+    stdin: "{{ registry_input }}"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  register: image_copy
+  changed_when: true
+  no_log: true

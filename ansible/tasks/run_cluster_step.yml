@@ -1,0 +1,11 @@
+---
+- name: Log in to {{ cluster_id }}
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/login_cluster.yml"
+
+- name: Record cluster-specific SSH paths
+  ansible.builtin.set_fact:
+    ssh_key: "{{ lookup('env', 'HOME') }}/.ssh/id_techquest"
+    ssh_known_hosts: "{{ lookup('env', 'HOME') }}/.ssh/kubevirt_known_hosts-{{ cluster_id }}"
+
+- name: Run {{ cluster_tasks }} on {{ cluster_id }}
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/{{ cluster_tasks }}"

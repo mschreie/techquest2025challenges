@@ -1,0 +1,51 @@
+---
+- name: Read admin password from env.sh for this cluster
+  ansible.builtin.shell: |
+    source ./env.sh
+    pw_name="ADMINPW_{{ cluster_id }}"
+    printf '%s\n' "${!pw_name}"
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  register: admin_password_result
+  changed_when: false
+  no_log: true
+
+- name: Keep only the admin password
+  ansible.builtin.set_fact:
+    admin_password: "{{ admin_password_result.stdout }}"
+  no_log: true
+
+- name: Log in to OpenShift without displaying the admin password
+  ansible.builtin.command:
+    argv:
+      - oc
+      - login
+      - -u
+      - admin
+      - -p
+      - "{{ admin_password }}"
+      - --insecure-skip-tls-verify
+      - "https://api.cluster-{{ cluster_id }}.dyn.redhatworkshops.io:6443/"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  register: login_result
+  changed_when: true
+  no_log: true
+
+- name: Verify the active API server
+  ansible.builtin.command: oc whoami --show-server
+  register: active_server
+  changed_when: false
+
+- name: Verify the active identity
+  ansible.builtin.command: oc whoami
+  register: active_user
+  changed_when: false
+
+- name: Confirm login reached the requested cluster as admin
+  ansible.builtin.assert:
+    that:
+      - active_server.stdout == 'https://api.cluster-' + cluster_id + '.dyn.redhatworkshops.io:6443'
+      - active_user.stdout == 'admin'
+    fail_msg: "The active OpenShift session is not admin on cluster {{ cluster_id }}."

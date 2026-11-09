@@ -1,0 +1,77 @@
+---
+- name: Parse participant credentials without displaying passwords
+  ansible.builtin.set_fact:
+    credentials_data: "{{ lookup('file', credentials_file) | from_yaml }}"
+  no_log: true
+
+- name: Build the participant usernames expected from MAXUSER
+  ansible.builtin.set_fact:
+    expected_users: "{{ range(1, (max_users | int) + 1) | map('string') | map('regex_replace', '^', 'user') | list }}"
+
+- name: Collect cluster ids named in the credentials file
+  ansible.builtin.set_fact:
+    credential_cluster_ids: "{{ credentials_data.data | dict2items | selectattr('key', 'search', '\\.cid$') | map(attribute='value') | unique | list }}"
+  no_log: true
+
+- name: Require credentials for exactly the clusters listed in env.sh
+  ansible.builtin.assert:
+    that:
+      - credential_cluster_ids | sort == cluster_ids | sort
+    fail_msg: >-
+      credentials.yaml lists {{ credential_cluster_ids | sort | join(', ') }}.
+      env.sh lists {{ cluster_ids | sort | join(', ') }}.
+      Update the guide before publishing.
+
+- name: Collect usernames published for this cluster
+  ansible.builtin.set_fact:
+    cluster_usernames: "{{ credentials_data.data | dict2items | selectattr('key', 'search', '\\.cid$') | selectattr('value', 'equalto', cluster_id) | map(attribute='key') | map('regex_replace', '\\.cid$', '.uid') | map('extract', credentials_data.data) | unique | sort | list }}"
+  no_log: true
+
+- name: Require this cluster to publish users user1 through the participant count
+  ansible.builtin.assert:
+    that:
+      - cluster_usernames | sort == expected_users | sort
+    fail_msg: >-
+      Cluster {{ cluster_id }} in credentials.yaml has users {{ cluster_usernames | join(', ') }}.
+      Expected {{ expected_users | join(', ') }}.
+
+- name: Confirm the httpd route exists
+  ansible.builtin.command: oc get route httpd -n default -o name
+  changed_when: false
+
+- name: Confirm util is reachable before publishing
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - default
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/util
+      - -c
+      - hostname
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  changed_when: false
+
+- name: Copy the validated guide to util
+  ansible.builtin.shell: |
+    set -o pipefail
+    COPYFILE_DISABLE=1 tar -C labguide -cf - . |
+      virtctl -n default ssh \
+        --known-hosts "{{ ssh_known_hosts }}" \
+        --local-ssh-opts='-o StrictHostKeyChecking=accept-new' \
+        -i "{{ ssh_key }}" \
+        -c 'sudo tar -xf - -C /var/www/html && sudo restorecon -R /var/www/html' \
+        cloud-user@vmi/util
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  changed_when: true
+  no_log: true

@@ -1,0 +1,30 @@
+---
+- name: Loop through the configured OpenShift clusters
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    repo_dir: "{{ playbook_dir | dirname }}"
+
+  tasks:
+    - name: Read cluster ids from env.sh
+      ansible.builtin.shell: |
+        source ./env.sh
+        read -r -a ids <<< "$MUTLICLUSTERID"
+        printf '%s\n' "${ids[@]}"
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      register: configured_clusters
+      changed_when: false
+
+    - name: Show cluster ids
+      ansible.builtin.debug:
+        var: configured_clusters.stdout_lines
+
+    - name: Log in to each cluster
+      ansible.builtin.include_tasks: login_cluster.yml
+      loop: "{{ configured_clusters.stdout_lines }}"
+      loop_control:
+        loop_var: cluster_id
+

@@ -1,0 +1,11 @@
+---
+# Each imported playbook logs in to every cluster listed in env.sh.
+# prepare_registry.yml asks for a registry token, so run that playbook on its own.
+# cleanup_lab.yml stays separate and deletes nothing unless -e confirm_cleanup=true.
+- import_playbook: create_thesource.yml
+- import_playbook: prepare_thesource.yml
+- import_playbook: configure_multus.yml
+- import_playbook: configure_thesource.yml
+- import_playbook: start_prep_vms.yml
+- import_playbook: prepare_util.yml
+- import_playbook: publish_labguide.yml

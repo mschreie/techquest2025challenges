@@ -1,0 +1,126 @@
+---
+- name: Define util and participant thesource targets
+  ansible.builtin.set_fact:
+    vm_targets:
+      - name: util
+        namespace: default
+
+- name: Add each participant thesource VM
+  ansible.builtin.set_fact:
+    vm_targets: "{{ vm_targets + [{'name': 'thesource', 'namespace': 'mtv-user' ~ item}] }}"
+  loop: "{{ user_ids }}"
+
+- name: Check which prepared VMs exist
+  ansible.builtin.command:
+    argv:
+      - oc
+      - get
+      - vm
+      - "{{ item.name }}"
+      - -n
+      - "{{ item.namespace }}"
+      - -o
+      - name
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ vm_targets }}"
+  loop_control:
+    label: "{{ item.namespace }}/{{ item.name }}"
+  register: vm_presence_probe
+  changed_when: false
+  failed_when: >-
+    vm_presence_probe.rc != 0 and not (
+    item.name == 'util' and 'NotFound' in (vm_presence_probe.stderr | default('')))
+
+- name: Remember VMs that already exist
+  ansible.builtin.set_fact:
+    existing_vm_targets: "{{ vm_presence_probe.results | selectattr('rc', 'equalto', 0) | map(attribute='item') | list }}"
+
+- name: Note the util VM when this cluster does not have it yet
+  ansible.builtin.debug:
+    msg: "util does not exist on {{ cluster_id }} yet. prepare_util.yml creates it."
+  when: vm_presence_probe.results | selectattr('rc', 'ne', 0) | selectattr('item.name', 'equalto', 'util') | list | length > 0
+
+- name: Read VM configuration
+  ansible.builtin.command:
+    argv:
+      - oc
+      - get
+      - vm
+      - "{{ item.name }}"
+      - -n
+      - "{{ item.namespace }}"
+      - -o
+      - json
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ existing_vm_targets }}"
+  loop_control:
+    label: "{{ item.namespace }}/{{ item.name }}"
+  register: vm_specs
+  changed_when: false
+
+- name: Read current VMI phase
+  ansible.builtin.command:
+    argv:
+      - oc
+      - get
+      - vmi
+      - "{{ item.name }}"
+      - -n
+      - "{{ item.namespace }}"
+      - -o
+      - jsonpath={.status.phase}
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ existing_vm_targets }}"
+  loop_control:
+    label: "{{ item.namespace }}/{{ item.name }}"
+  register: vmi_phases
+  changed_when: false
+  failed_when: false
+
+- name: Start VMs explicitly stopped with no VMI
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "{{ item.item.namespace }}"
+      - start
+      - "{{ item.item.name }}"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ vmi_phases.results }}"
+  loop_control:
+    index_var: vm_index
+    label: "{{ item.item.namespace }}/{{ item.item.name }}"
+  when: >-
+    item.rc != 0 and
+    (vm_specs.results[vm_index].stdout | from_json).spec.runStrategy | default('Always') in ['Halted', 'Manual']
+  register: start_results
+  changed_when: true
+
+- name: Wait for every prepared VMI to become Ready
+  ansible.builtin.command:
+    argv:
+      - oc
+      - wait
+      - --for=condition=Ready
+      - "vmi/{{ item.name }}"
+      - -n
+      - "{{ item.namespace }}"
+      - --timeout=10m
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ existing_vm_targets }}"
+  loop_control:
+    label: "{{ item.namespace }}/{{ item.name }}"
+  register: ready_results
+  changed_when: false
+
+- name: Show prepared VM readiness
+  ansible.builtin.debug:
+    msg: "{{ item.item.namespace }}/{{ item.item.name }}: Ready"
+  loop: "{{ ready_results.results }}"
+  loop_control:
+    label: "{{ item.item.namespace }}/{{ item.item.name }}"

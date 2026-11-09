@@ -1,0 +1,190 @@
+---
+- name: Create the cluster-specific known-hosts file
+  ansible.builtin.file:
+    path: "{{ lookup('env', 'HOME') }}/.ssh"
+    state: directory
+    mode: '0700'
+
+- name: Inspect the known-hosts file
+  ansible.builtin.stat:
+    path: "{{ ssh_known_hosts }}"
+  register: known_hosts_stat
+
+- name: Create or secure the known-hosts file only when necessary
+  ansible.builtin.file:
+    path: "{{ ssh_known_hosts }}"
+    state: touch
+    mode: '0600'
+    access_time: preserve
+    modification_time: preserve
+  when: not known_hosts_stat.stat.exists or known_hosts_stat.stat.mode != '0600'
+
+- name: Calculate the local lab ZIP checksum
+  ansible.builtin.command: sha256sum "{{ zip_local_path }}"
+  register: local_zip_checksum
+  changed_when: false
+
+- name: Check SSH access and the ZIP checksum on each thesource
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/thesource
+      - -c
+      - "sha256sum {{ zip_remote_path }}"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: remote_zip_checks
+  changed_when: false
+  failed_when: false
+
+- name: Copy the ZIP only when missing or different
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - scp
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - "{{ zip_local_path }}"
+      - "cloud-user@vmi/thesource:."
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    index_var: user_index
+    label: "mtv-user{{ item }}"
+  when: >-
+    remote_zip_checks.results[user_index].rc != 0 or
+    (remote_zip_checks.results[user_index].stdout.split() | first | default('')) !=
+    (local_zip_checksum.stdout.split() | first)
+  register: zip_copy
+  changed_when: true
+
+- name: Check whether the root work directory is prepared
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/thesource
+      - -c
+      - "sudo test -f {{ workdir_remote }}/Containerfile && sudo test -d {{ workdir_remote }}/output"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: workdir_checks
+  changed_when: false
+  failed_when: false
+
+- name: Extract the ZIP only when the work directory is missing
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/thesource
+      - -c
+      - >-
+        sudo bash -lc 'if [ ! -f {{ workdir_remote }}/Containerfile ]; then
+        unzip -oq {{ zip_remote_path }} -d /root &&
+        rm -f {{ workdir_remote }}/README.md; fi;
+        mkdir -p {{ workdir_remote }}/output'
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    index_var: user_index
+    label: "mtv-user{{ item }}"
+  when: workdir_checks.results[user_index].rc != 0
+  register: extraction
+  changed_when: true
+
+- name: Check whether oc and virtctl are installed in each VM
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/thesource
+      - -c
+      - "sudo test -x /usr/local/bin/oc && sudo test -x /usr/local/bin/virtctl"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: tool_checks
+  changed_when: false
+  failed_when: false
+
+- name: Install missing oc and virtctl binaries
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/thesource
+      - -c
+      - >-
+        sudo bash -lc 'set -e;
+        if [ ! -x /usr/local/bin/oc ]; then
+        curl -fL -o /tmp/oc.tar https://downloads-openshift-console.apps.cluster-{{ cluster_id }}.dyn.redhatworkshops.io/amd64/linux/oc.tar;
+        tar xf /tmp/oc.tar -C /usr/local/bin; fi;
+        if [ ! -x /usr/local/bin/virtctl ]; then
+        curl -fL -o /tmp/virtctl.tar.gz https://hyperconverged-cluster-cli-download-openshift-cnv.apps.cluster-{{ cluster_id }}.dyn.redhatworkshops.io/amd64/linux/virtctl.tar.gz;
+        tar xzf /tmp/virtctl.tar.gz -C /usr/local/bin; fi;
+        chmod 0755 /usr/local/bin/oc /usr/local/bin/virtctl;
+        restorecon /usr/local/bin/oc /usr/local/bin/virtctl;
+        grep -qxF "export PATH=/usr/local/bin:\$PATH" /root/.bash_profile ||
+        echo "export PATH=/usr/local/bin:\$PATH" >> /root/.bash_profile;
+        echo TOOLS_READY'
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    index_var: user_index
+    label: "mtv-user{{ item }}"
+  when: tool_checks.results[user_index].rc != 0
+  register: tool_install
+  changed_when: "'TOOLS_READY' in tool_install.stdout"
