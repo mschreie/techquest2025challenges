@@ -60,4 +60,3 @@
     label: "mtv-user{{ item }}"
   when: vm_checks.results[user_index].rc != 0
   changed_when: true
-  no_log: true

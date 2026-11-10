@@ -9,14 +9,12 @@
     chdir: "{{ repo_dir }}"
   register: admin_password_result
   changed_when: false
-  no_log: true
 
 - name: Keep only the admin password
   ansible.builtin.set_fact:
     admin_password: "{{ admin_password_result.stdout }}"
-  no_log: true
 
-- name: Log in to OpenShift without displaying the admin password
+- name: Log in to OpenShift
   ansible.builtin.command:
     argv:
       - oc
@@ -31,7 +29,6 @@
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
   register: login_result
   changed_when: true
-  no_log: true
 
 - name: Verify the active API server
   ansible.builtin.command: oc whoami --show-server

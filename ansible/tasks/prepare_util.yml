@@ -76,7 +76,6 @@
   when: util_vm_check.rc != 0
   register: util_vm_create
   changed_when: true
-  no_log: true
 
 - name: Wait until the util VMI is Ready
   ansible.builtin.command:

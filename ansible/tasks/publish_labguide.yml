@@ -1,8 +1,7 @@
 ---
-- name: Parse participant credentials without displaying passwords
+- name: Parse participant credentials
   ansible.builtin.set_fact:
     credentials_data: "{{ lookup('file', credentials_file) | from_yaml }}"
-  no_log: true
 
 - name: Build the participant usernames expected from MAXUSER
   ansible.builtin.set_fact:
@@ -11,7 +10,6 @@
 - name: Collect cluster ids named in the credentials file
   ansible.builtin.set_fact:
     credential_cluster_ids: "{{ credentials_data.data | dict2items | selectattr('key', 'search', '\\.cid$') | map(attribute='value') | unique | list }}"
-  no_log: true
 
 - name: Warn when credentials.yaml does not list the same clusters
   ansible.builtin.debug:
@@ -24,7 +22,6 @@
 - name: Collect usernames published for this cluster
   ansible.builtin.set_fact:
     cluster_usernames: "{{ credentials_data.data | dict2items | selectattr('key', 'search', '\\.cid$') | selectattr('value', 'equalto', cluster_id) | map(attribute='key') | map('regex_replace', '\\.cid$', '.uid') | map('extract', credentials_data.data) | unique | sort | list }}"
-  no_log: true
 
 - name: Warn when this cluster's published users differ from MAXUSER
   ansible.builtin.debug:
@@ -75,4 +72,3 @@
   environment:
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
   changed_when: true
-  no_log: true

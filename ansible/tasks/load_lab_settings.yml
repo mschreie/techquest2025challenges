@@ -2,13 +2,12 @@
 - name: Read cluster ids, participant count, and image URL from env.sh
   ansible.builtin.shell: |
     source ./env.sh
-    printf '%s\n' "$MUTLICLUSTERID" "$MAXUSER" "$THESOURCEURL"
+    printf '%s\n' "$MUTLICLUSTERID" "$MAXUSER" "$THESOURCEURL" "$IMAGEMODEVMURL"
   args:
     executable: /bin/bash
     chdir: "{{ repo_dir }}"
   register: lab_settings
   changed_when: false
-  no_log: true
 
 - name: Store lab settings for every cluster step
   ansible.builtin.set_fact:
@@ -16,4 +15,4 @@
     max_users: "{{ lab_settings.stdout_lines[1] | int }}"
     user_ids: "{{ range(1, (lab_settings.stdout_lines[1] | int) + 1) | list }}"
     thesource_url: "{{ lab_settings.stdout_lines[2] }}"
-  no_log: true
+    imagemode_vm_url: "{{ lab_settings.stdout_lines[3] }}"
