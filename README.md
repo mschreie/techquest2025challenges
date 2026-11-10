@@ -6,10 +6,22 @@ Order that offering on demo.redhat.com. Request more than one cluster through th
 
 Each participant uses a classic RHEL VM, `thesource`, to build an image mode VM and later update it. A separate `util` VM on each cluster serves the lab guide. Files in the local `labguide/` directory are published to that web server.
 
-## Build the participant image
+We will also provide an image mode vm, so a participant can continue with the update task, even if the build task did not work out or takes longer as expected.
 
-Create a package-based RHEL image in Image Builder with at least:
+## Build the qcow disk images for the 2 participant VMs (thesource and imagemode)
 
+Use image bulder, which is found here: https://console.redhat.com/insights/image-builder
+Upload the image definitions found in this repo under files/
+
+files/rhel-10-x86_64-20261110.json
+files/rhel-10-x86_64-imagemode-20261110.json
+
+and build the two images. This takes a moment.
+
+For your information:
+In both qcow image definitions:
+
+Includes:
 - podman
 - qemu-guest-agent
 - cloud-init
@@ -24,11 +36,12 @@ Also useful:
 - vim-data
 - vim-enhanced
 
-The blueprint in this repository is `imagebuilder-blueprint/rhel-10-x86_64-20251229.json`. Upload it in the console if it is not already there:
+Only in the "thesource" image:
+Only in the "imagemode" image:
 
-https://console.redhat.com/insights/image-builder
 
-Use RHEL 10 host version 6 or newer. Built images expire after a few days, so create a fresh image and copy its URL before preparing the clusters.
+Built images expire after a few days, so create fresh images and copy the URLs before preparing the clusters.
+Ensure the URLs of the images are not swapped! 
 
 ## Prepare the clusters
 

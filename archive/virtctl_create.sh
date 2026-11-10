@@ -1,5 +1,5 @@
 . ./env.sh
-virtctl create vm --name thesource --volume-import "type:http,size:20Gi,url:$IMAGEBUILDERURL" \
+virtctl create vm --name thesource --volume-import "type:http,size:20Gi,url:$THESOURCEURL" \
    | awk '
        /^      terminationGracePeriodSeconds: 180/ { print; 
                   print "      accessCredentials:"
@@ -29,7 +29,7 @@ exit
 ############################
 
 
-virtctl create vm --name thesource --volume-import "type:http,size:20Gi,url:$IMAGEBUILDERURL" \
+virtctl create vm --name thesource --volume-import "type:http,size:20Gi,url:$THESOURCEURL" \
    sed -i '/^      terminationGracePeriodSeconds: 180/a\
       accessCredentials:
         - sshPublicKey:

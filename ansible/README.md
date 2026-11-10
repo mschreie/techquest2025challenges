@@ -19,7 +19,7 @@ Set:
 - `MUTLICLUSTERID`: space-separated cluster ids, for example `cwk2t rhwqw`. The name is spelled that way in the file.
 - `MAXUSER`: number of participant projects on each cluster. The playbooks use `mtv-user1` through `mtv-userN`.
 - `ADMINPW_<cluster id>`: admin password for each id in `MUTLICLUSTERID`, for example `ADMINPW_cwk2t`.
-- `IMAGEBUILDERURL`: signed URL of the RHEL qcow2 built in Image Builder. Replace it when the image expires.
+- `THESOURCEURL`: signed URL of the RHEL qcow2 used for the `thesource` VMs. Replace it when the image expires.
 
 Every playbook reads this file, logs in as admin, and runs once for each cluster id.
 
@@ -60,7 +60,7 @@ ansible-playbook -i 'localhost,' -c local ansible/create_thesource.yml
 
 `ansible/prepare_all.yml` runs steps 1–6 and then publishes the lab guide. `prepare_registry.yml` stays separate because it prompts for a token.
 
-1. `ansible/create_thesource.yml` creates only missing participant VMs, using `MAXUSER` and `IMAGEBUILDERURL` from `env.sh`.
+1. `ansible/create_thesource.yml` creates only missing participant VMs, using `MAXUSER` and `THESOURCEURL` from `env.sh`.
 2. `ansible/prepare_thesource.yml` waits until each `thesource` VMI is Ready and SSH accepts connections, then copies the lab ZIP when missing or different, extracts it only if the work directory is absent, and installs `oc`/`virtctl` only if missing.
 3. `ansible/configure_multus.yml` ensures each participant `thesource` has the flat network.
 4. `ansible/configure_thesource.yml` ensures the internal-registry config and verifies the Red Hat subscription organization from `rhsm.sh`.

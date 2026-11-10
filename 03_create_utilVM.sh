@@ -40,7 +40,7 @@ do
     # create the VM
     echo "Create VM Manifest"
     echo tmp/virtualmachine-util${CLUSTERID}.yaml
-    virtctl create vm --instancetype u1.small --name util --volume-import "type:http,size:20Gi,url:$IMAGEBUILDERURL" \
+    virtctl create vm --instancetype u1.small --name util --volume-import "type:http,size:20Gi,url:$THESOURCEURL" \
     | awk '
             /^      terminationGracePeriodSeconds: 180/ { print; 
                print "      accessCredentials:"

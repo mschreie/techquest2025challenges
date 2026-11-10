@@ -15,7 +15,7 @@ do
 	for ((i=1;i<=MAXUSER;i++)); do
            echo "Create VM Manifest"
 	   echo tmp/virtualmachine-thesource_${CLUSTERID}_${i}.yaml
-	   virtctl create vm --instancetype u1.small --name thesource --volume-import "type:http,size:20Gi,url:$IMAGEBUILDERURL" \
+	   virtctl create vm --instancetype u1.small --name thesource --volume-import "type:http,size:20Gi,url:$THESOURCEURL" \
 	   | awk '
 	       /^      terminationGracePeriodSeconds: 180/ { print; 
 			  print "      accessCredentials:"
