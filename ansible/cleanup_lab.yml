@@ -6,7 +6,6 @@
   vars:
     repo_dir: "{{ playbook_dir | dirname }}"
     cluster_tasks: tasks/cleanup_lab.yml
-    rhsm_org_id: "11009103"
     confirm_cleanup: false
   tasks:
     - name: Run this step on every cluster in env.sh

@@ -7,8 +7,6 @@
   vars:
     repo_dir: "{{ playbook_dir | dirname }}"
     cluster_tasks: tasks/prepare_util.yml
-    rhsm_org_id: "11009103"
-    rhsm_activation_key: RHEL
     util_namespace: default
     util_name: util
     util_workdir: /root/rhel_image_mode-main

@@ -1,10 +1,18 @@
 . ./env.sh
+if [[ ! -f ./rhsm.sh ]]; then
+  echo "Missing rhsm.sh. Copy rhsm.sh.example to rhsm.sh and set the Red Hat subscription values." >&2
+  exit 1
+fi
+. ./rhsm.sh
+: "${RHSM_ORG_ID:?Set RHSM_ORG_ID in rhsm.sh}"
+: "${RHSM_ACTIVATION_KEY:?Set RHSM_ACTIVATION_KEY in rhsm.sh}"
 
 # changed: use a cluster-specific host-key file for all util SSH and SCP operations
 vssh() {
    local namespace=$1
    shift
    virtctl -n "$namespace" ssh --known-hosts "$SSH_KNOWN_HOSTS" \
+      --local-ssh-opts="-o UserKnownHostsFile=$SSH_KNOWN_HOSTS" \
       --local-ssh-opts='-o StrictHostKeyChecking=accept-new' "$@"
 }
 
@@ -12,6 +20,7 @@ vscp() {
    local namespace=$1
    shift
    virtctl -n "$namespace" scp --known-hosts "$SSH_KNOWN_HOSTS" \
+      --local-ssh-opts="-o UserKnownHostsFile=$SSH_KNOWN_HOSTS" \
       --local-ssh-opts='-o StrictHostKeyChecking=accept-new' "$@"
 }
 
@@ -90,7 +99,7 @@ do
     echo Number 6
     virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c "sudo -i -- bash -c 'echo "PATH=/usr/local/bin:$PATH" >>/root/.bash_profile'" 
     echo Number 7
-    virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c "sudo -i -- bash -c 'subscription-manager register --org 7257185 --activationkey RHEL'"
+    virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c "sudo -i -- bash -c 'subscription-manager register --org ${RHSM_ORG_ID} --activationkey ${RHSM_ACTIVATION_KEY}'"
     echo Number 8
     virtctl -n default ssh -i ~/.ssh/id_techquest cloud-user@vmi/util  -c 'sudo tee /etc/containers/registries.conf.d/99-openshift-internal.conf >/dev/null' < ./files/99-openshift-internal.conf
 

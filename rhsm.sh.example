@@ -1,0 +1,5 @@
+# Copy this file to rhsm.sh and fill in both values.
+# rhsm.sh is listed in .gitignore. Do not commit it.
+# Together these values can register RHEL systems to your Red Hat account.
+RHSM_ORG_ID=""
+RHSM_ACTIVATION_KEY=""

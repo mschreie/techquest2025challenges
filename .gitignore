@@ -1,4 +1,5 @@
 bin/
+rhsm.sh
 .DS_Store
 tmp/virtualmachine-*.yaml
 rhel_image_mode-main/

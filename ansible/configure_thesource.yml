@@ -6,8 +6,6 @@
   vars:
     repo_dir: "{{ playbook_dir | dirname }}"
     cluster_tasks: tasks/configure_thesource.yml
-    rhsm_org_id: "11009103"
-    rhsm_activation_key: RHEL
     registry_config_path: /etc/containers/registries.conf.d/99-openshift-internal.conf
     registry_config: "{{ lookup('file', repo_dir + '/files/99-openshift-internal.conf') }}"
   tasks:

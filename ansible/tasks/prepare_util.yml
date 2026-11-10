@@ -1,4 +1,7 @@
 ---
+- name: Load Red Hat subscription settings
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/load_rhsm_settings.yml"
+
 - name: Create the cluster-specific known-hosts directory
   ansible.builtin.file:
     path: "{{ lookup('env', 'HOME') }}/.ssh"
@@ -75,7 +78,7 @@
   changed_when: true
   no_log: true
 
-- name: Wait for the util VMI to become Ready
+- name: Wait until the util VMI is Ready
   ansible.builtin.command:
     argv:
       - oc
@@ -84,7 +87,13 @@
       - vmi/util
       - -n
       - default
-      - --timeout=10m
+      - --timeout=60s
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  register: util_ready
+  until: util_ready.rc == 0
+  retries: 30
+  delay: 60
   changed_when: false
 
 - name: Wait for SSH on util
@@ -96,6 +105,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -124,6 +134,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -145,6 +156,7 @@
       - scp
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -168,6 +180,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -189,6 +202,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -214,6 +228,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -235,6 +250,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -268,6 +284,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -297,6 +314,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -319,6 +337,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -340,6 +359,7 @@
       - scp
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -360,6 +380,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -383,6 +404,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -404,6 +426,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -439,6 +462,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -460,6 +484,7 @@
       - scp
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -488,6 +513,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"

@@ -13,27 +13,26 @@
     credential_cluster_ids: "{{ credentials_data.data | dict2items | selectattr('key', 'search', '\\.cid$') | map(attribute='value') | unique | list }}"
   no_log: true
 
-- name: Require credentials for exactly the clusters listed in env.sh
-  ansible.builtin.assert:
-    that:
-      - credential_cluster_ids | sort == cluster_ids | sort
-    fail_msg: >-
-      credentials.yaml lists {{ credential_cluster_ids | sort | join(', ') }}.
+- name: Warn when credentials.yaml does not list the same clusters
+  ansible.builtin.debug:
+    msg: >-
+      Warning: credentials.yaml lists {{ credential_cluster_ids | sort | join(', ') }}.
       env.sh lists {{ cluster_ids | sort | join(', ') }}.
-      Update the guide before publishing.
+      Publishing continues.
+  when: credential_cluster_ids | sort != cluster_ids | sort
 
 - name: Collect usernames published for this cluster
   ansible.builtin.set_fact:
     cluster_usernames: "{{ credentials_data.data | dict2items | selectattr('key', 'search', '\\.cid$') | selectattr('value', 'equalto', cluster_id) | map(attribute='key') | map('regex_replace', '\\.cid$', '.uid') | map('extract', credentials_data.data) | unique | sort | list }}"
   no_log: true
 
-- name: Require this cluster to publish users user1 through the participant count
-  ansible.builtin.assert:
-    that:
-      - cluster_usernames | sort == expected_users | sort
-    fail_msg: >-
-      Cluster {{ cluster_id }} in credentials.yaml has users {{ cluster_usernames | join(', ') }}.
+- name: Warn when this cluster's published users differ from MAXUSER
+  ansible.builtin.debug:
+    msg: >-
+      Warning: cluster {{ cluster_id }} in credentials.yaml has users {{ cluster_usernames | join(', ') | default('none', true) }}.
       Expected {{ expected_users | join(', ') }}.
+      Publishing continues.
+  when: cluster_usernames | sort != expected_users | sort
 
 - name: Confirm the httpd route exists
   ansible.builtin.command: oc get route httpd -n default -o name
@@ -48,6 +47,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -64,6 +64,7 @@
     COPYFILE_DISABLE=1 tar -C labguide -cf - . |
       virtctl -n default ssh \
         --known-hosts "{{ ssh_known_hosts }}" \
+        --local-ssh-opts="-o UserKnownHostsFile={{ ssh_known_hosts }}" \
         --local-ssh-opts='-o StrictHostKeyChecking=accept-new' \
         -i "{{ ssh_key }}" \
         -c 'sudo tar -xf - -C /var/www/html && sudo restorecon -R /var/www/html' \

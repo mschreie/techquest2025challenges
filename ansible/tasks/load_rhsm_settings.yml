@@ -1,0 +1,29 @@
+---
+- name: Read Red Hat subscription settings from rhsm.sh
+  ansible.builtin.shell: |
+    if [[ ! -f ./rhsm.sh ]]; then
+      echo "Missing rhsm.sh. Copy rhsm.sh.example to rhsm.sh and set the Red Hat subscription values." >&2
+      exit 1
+    fi
+    source ./rhsm.sh
+    printf '%s\n' "$RHSM_ORG_ID" "$RHSM_ACTIVATION_KEY"
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  register: rhsm_settings
+  changed_when: false
+  no_log: true
+
+- name: Store Red Hat subscription settings
+  ansible.builtin.set_fact:
+    rhsm_org_id: "{{ rhsm_settings.stdout_lines[0] }}"
+    rhsm_activation_key: "{{ rhsm_settings.stdout_lines[1] }}"
+  no_log: true
+
+- name: Require both Red Hat subscription settings
+  ansible.builtin.assert:
+    that:
+      - rhsm_org_id | length > 0
+      - rhsm_activation_key | length > 0
+    fail_msg: Set RHSM_ORG_ID and RHSM_ACTIVATION_KEY in rhsm.sh. Do not commit that file.
+  no_log: true

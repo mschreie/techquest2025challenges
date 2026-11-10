@@ -1,4 +1,7 @@
 ---
+- name: Load Red Hat subscription settings
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/load_rhsm_settings.yml"
+
 - name: Reset the per-cluster subscription summary
   ansible.builtin.set_fact:
     subscription_states: []
@@ -54,6 +57,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
@@ -105,6 +109,7 @@
       - ssh
       - --known-hosts
       - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
       - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
       - -i
       - "{{ ssh_key }}"
