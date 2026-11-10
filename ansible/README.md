@@ -69,7 +69,7 @@ ansible-playbook -i 'localhost,' -c local ansible/create_thesource.yml
 6. `ansible/start_prep_vms.yml` starts stopped organizer-prepared VMs and waits for them to become Ready. A missing `util` VM is skipped here.
 7. `ansible/prepare_util.yml` waits until the `util` VMI is Ready, creates it on each cluster when it is missing, and prepares its tools and web server. Registration uses `rhsm.sh`.
 8. `ansible/prepare_registry.yml` prompts once for a Red Hat registry service-account username and token, then pushes the required images on every cluster. Run this only for a new cluster or when those images are missing.
-9. `ansible/publish_labguide.yml` publishes `labguide/` to each cluster's `util`. A mismatch between `credentials.yaml` and the clusters or users in `env.sh` is reported as a warning.
+9. `ansible/publish_labguide.yml` publishes `labguide/` to each cluster's `util`. `credentials.yaml` stays outside the web root. Participants look up one team number at `/cgi-bin/credentials.cgi`. A mismatch between `credentials.yaml` and the clusters or users in `env.sh` is reported as a warning.
 
 ## Clean up
 

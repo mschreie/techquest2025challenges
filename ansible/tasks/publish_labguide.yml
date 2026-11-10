@@ -55,16 +55,73 @@
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
   changed_when: false
 
+- name: Copy the credentials lookup files to util
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - default
+      - scp
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - "{{ item.src }}"
+      - "cloud-user@vmi/util:{{ item.dest }}"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop:
+    - src: "{{ repo_dir }}/files/credentials.cgi"
+      dest: credentials.cgi
+    - src: "{{ repo_dir }}/files/credentials.conf"
+      dest: credentials.conf
+    - src: "{{ credentials_file }}"
+      dest: credentials.yaml
+  loop_control:
+    label: "{{ item.dest }}"
+  changed_when: true
+
+- name: Install the team lookup outside the web root
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - default
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/util
+      - -c
+      - >-
+        sudo bash -lc 'install -d -m 0755 -o root -g root /var/www/cgi-bin &&
+        install -d -m 0750 -o root -g apache /var/www/credentials &&
+        install -m 0755 -o root -g root /home/cloud-user/credentials.cgi /var/www/cgi-bin/credentials.cgi &&
+        install -m 0640 -o root -g apache /home/cloud-user/credentials.yaml /var/www/credentials/credentials.yaml &&
+        install -m 0644 -o root -g root /home/cloud-user/credentials.conf /etc/httpd/conf.d/credentials.conf &&
+        rm -f /home/cloud-user/credentials.yaml /home/cloud-user/credentials.cgi /home/cloud-user/credentials.conf /var/www/html/credentials.yaml &&
+        restorecon -R /var/www/cgi-bin/credentials.cgi /var/www/credentials /etc/httpd/conf.d/credentials.conf &&
+        if ! getsebool httpd_enable_cgi | grep -q " --> on"; then setsebool -P httpd_enable_cgi on; fi &&
+        apachectl configtest && systemctl reload httpd'
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  changed_when: true
+
 - name: Copy the validated guide to util
   ansible.builtin.shell: |
     set -o pipefail
-    COPYFILE_DISABLE=1 tar -C labguide -cf - . |
+    COPYFILE_DISABLE=1 tar -C labguide --exclude credentials.yaml -cf - . |
       virtctl -n default ssh \
         --known-hosts "{{ ssh_known_hosts }}" \
         --local-ssh-opts="-o UserKnownHostsFile={{ ssh_known_hosts }}" \
         --local-ssh-opts='-o StrictHostKeyChecking=accept-new' \
         -i "{{ ssh_key }}" \
-        -c 'sudo tar -xf - -C /var/www/html && sudo restorecon -R /var/www/html' \
+        -c 'sudo tar -xf - -C /var/www/html && sudo rm -f /var/www/html/credentials.yaml && sudo restorecon -R /var/www/html' \
         cloud-user@vmi/util
   args:
     executable: /bin/bash

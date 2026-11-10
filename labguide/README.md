@@ -33,13 +33,16 @@ In most environments this file should consist of 3 lines with no additional whit
 `chmod 400 ~/.ssh/id_techquest`
 
 ## Login
-In the following a capital X stands for your Group Number.  
 
-You find the credentials in: ./credentials.yaml
-This should provide a URL wich includes a individual identity string. This string is the `cluster id`used later. You will also find a Username and a password.          
-    MYUID=userX   
-    MYPASSWD=YYYYYY   
-    MYCID=ZZZZZ   
+Look up the team number you were given. The page returns your cluster ID, user ID, and password. From the lab guide directory, open `credentials.html`:
+
+[Team credentials](/cgi-bin/credentials.cgi)
+
+In the commands below, a capital X stands for the number in that user ID (`userX`).
+
+    MYCID=<cluster ID>
+    MYUID=<user ID>
+    MYPASSWD=<password>   
 
 You got a "normal" RHEL 10 VM running in an OCP-V environment from where you do most of the work.  You need to login to OCP first:   
 `oc login -u $MYUID -p $MYPASSWD https://api.cluster-${MYCID}.dyn.redhatworkshops.io:6443`
