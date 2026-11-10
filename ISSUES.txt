@@ -1,13 +1,17 @@
 # TODOs
 - Number Playbooks (00, 01,...) - Aina 
-- Test Playbooks - Markus
-- Decide on Playbooks / Scripts - Markus
+- Test Playbooks - Markus - DONE and updated to multicluster usage.
+- Decide on Playbooks / Scripts - Markus - yes, we stick with the playbooks.
 - Prepare Image Mode VM - As emergency if Step 1 cannot be completed - ASAP - Playbook schreiben - Aina
-- Credentials in Lab Guide
-- Improve Lab Guide 
+	STATUS: There is a image mode VM available, and documented. Deployment is automated. BUT it does not include a running http-server yet. 
+	TODO: change the image definition in the repository to include the httpd server up and running. 
+- Credentials in Lab Guide - STATUS: DONE
+- Improve Lab Guide - STATUS: started
+	01 done till "## Check the VM"
+	02 not started at all
 - Document tiny-URL / QR Code: https://mo-hub.apps.int.spoke.prod.us-east-1.aws.paas.redhat.com/ (needs VPN)
-- Mention Daniel's Lab in our presentation
-- Try multi-cluster
+- Mention Daniel's Lab in our presentation - STATUS: Started but slide needs improvement.
+- Try multi-cluster - STATUS: DONE 
 
 # TODOs before LAB starts
 - Tiny-URL / QR Code: https://mo-hub.apps.int.spoke.prod.us-east-1.aws.paas.redhat.com/
