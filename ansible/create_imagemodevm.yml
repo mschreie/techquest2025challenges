@@ -1,0 +1,11 @@
+---
+- name: Create only missing image mode VMs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    repo_dir: "{{ playbook_dir | dirname }}"
+    cluster_tasks: tasks/create_imagemodevm.yml
+  tasks:
+    - name: Run this step on every cluster in env.sh
+      ansible.builtin.include_tasks: tasks/for_each_cluster.yml

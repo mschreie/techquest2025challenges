@@ -1,0 +1,48 @@
+{
+  "bootc": {
+    "reference": "quay.io/redhat-services-prod/insights-management-tenant/image-builder-bootc-foundry/rhel-10-qcow2:latest"
+  },
+  "content_sources": [],
+  "customizations": {
+    "hostname": "targethost",
+    "packages": [
+      "podman",
+      "podman-docker",
+      "podman-remote",
+      "vim-common",
+      "vim-enhanced",
+      "vim-data",
+      "buildah",
+      "cockpit-podman",
+      "xorg-x11-xauth",
+      "bash-color-prompt",
+      "qemu-guest-agent",
+      "git-all",
+      "zip",
+      "gzip",
+      "skopeo",
+      "skopeo-tests",
+      "curl",
+      "wget",
+      "langpacks-de"
+    ],
+    "users": [
+      {
+        "groups": [
+          "wheel"
+        ],
+        "hasPassword": false,
+        "name": "labuser",
+        "ssh_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINPbf8p7KeyYIj3eKEkbvvdZ43lTFahqOIZBobXse2wa techquest2025"
+      }
+    ]
+  },
+  "description": "RHEL 10 image mode VMs from",
+  "distribution": "rhel-10.2",
+  "metadata": {
+    "exported_at": "2026-11-10 09:18:58.763044109 +0000 UTC",
+    "is_on_prem": false,
+    "parent_id": "1fd38216-1e98-4fa2-b81b-17c020e4920a"
+  },
+  "name": "rhel-10-x86_64-imagemode-20261110"
+}

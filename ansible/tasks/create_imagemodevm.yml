@@ -1,0 +1,89 @@
+---
+- name: Require the image mode disk URL
+  ansible.builtin.assert:
+    that:
+      - imagemode_vm_url | length > 0
+    fail_msg: Set IMAGEMODEVMURL in env.sh.
+
+- name: Check whether each image mode VM already exists
+  ansible.builtin.command: oc get vm rhel10imagemode -n mtv-user{{ item }}
+  loop: "{{ range(1, max_users + 1) | list }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: vm_checks
+  changed_when: false
+  failed_when: vm_checks.rc != 0 and 'NotFound' not in vm_checks.stderr
+
+- name: Ensure the SSH public-key secret exists in each project
+  ansible.builtin.command: oc apply -f files/secret.yaml -n mtv-user{{ item }}
+  args:
+    chdir: "{{ repo_dir }}"
+  loop: "{{ range(1, max_users + 1) | list }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: secret_apply
+  changed_when: "'unchanged' not in secret_apply.stdout"
+
+- name: Create an image mode VM only when it is missing
+  ansible.builtin.shell: |
+    set -o pipefail
+    virtctl create vm --instancetype u1.small --name rhel10imagemode \
+      --volume-import "type:http,size:20Gi,url:{{ imagemode_vm_url }}" |
+    awk '
+      /^      terminationGracePeriodSeconds: 180/ {
+        print
+        print "      accessCredentials:"
+        print "        - sshPublicKey:"
+        print "            propagationMethod:"
+        print "              noCloud: {}"
+        print "            source:"
+        print "              secret:"
+        print "                secretName: techquest"
+        next
+      }
+      /^status: {}/ {
+        print "      - cloudInitNoCloud:"
+        print "          userData: |-"
+        print "            #cloud-config"
+        print "            user: cloud-user"
+        print "            password: redhat"
+        print "            chpasswd: { expire: False }"
+        print "        name: cloudinitdisk"
+        print
+        next
+      }
+      { print }
+    ' |
+    oc create -f - -n "mtv-user{{ item }}"
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ range(1, max_users + 1) | list }}"
+  loop_control:
+    index_var: user_index
+    label: "mtv-user{{ item }}"
+  when: vm_checks.results[user_index].rc != 0
+  changed_when: true
+
+- name: Wait until each image mode VMI is Ready
+  ansible.builtin.command:
+    argv:
+      - oc
+      - wait
+      - --for=condition=Ready
+      - vmi/rhel10imagemode
+      - -n
+      - "mtv-user{{ item }}"
+      - --timeout=60s
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: imagemode_ready
+  until: imagemode_ready.rc == 0
+  retries: 30
+  delay: 60
+  changed_when: false

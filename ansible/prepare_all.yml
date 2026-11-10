@@ -6,6 +6,7 @@
 - import_playbook: prepare_thesource.yml
 - import_playbook: configure_multus.yml
 - import_playbook: configure_thesource.yml
+- import_playbook: create_imagemodevm.yml
 - import_playbook: start_prep_vms.yml
 - import_playbook: prepare_util.yml
 - import_playbook: publish_labguide.yml
