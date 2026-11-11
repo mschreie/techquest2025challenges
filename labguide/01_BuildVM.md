@@ -215,6 +215,7 @@ podman run --rm --tls-verify=false --privileged \
     "image-registry.openshift-image-registry.svc:5000/${PROJECT}/myrhel10:latest" \
     --output /output
 ```
+
 The above step may take some time. So please execute the command before reviewing the options and arguments. Nevertheless worth to review the parameters, so you know what we have done:
 
 | Option / Argument | Explaination |
@@ -261,6 +262,15 @@ virtctl image-upload dv rhel10image --size=12Gi \
 
 `cloud.init.txt` supplies the SSH public key for the new VM. Encode it and create the VM from the uploaded DataVolume:
 
+`cat cloud.init.txt`
+
+```yaml
+#cloud-config
+ssh_authorized_keys:
+     - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINPbf8p7KeyYIj3eKEkbvvdZ43lTFahqOIZBobXse2wa techquest2025
+```
+
+
 ```bash
 test -s cloud.init.txt
 CLOUD_INIT_USERDATA=$(base64 -w 0 cloud.init.txt)
@@ -298,17 +308,27 @@ Wait for it to be ready and check its status:
 oc wait --for=condition=Ready vmi/rhel10imagemode -n "$PROJECT" --timeout=10m
 oc get vmi rhel10imagemode -n "$PROJECT" -o wide
 ```
+`oc wait` runs till the condition is met. This is a nice way within scripts and automation to ensure the next step is only taken when the system is ready.\n\n
+`os get vmi` we already know.\n\n
+You can also try `oc decribe ...` or `oc get vm ... -o ymal` or `oc get vmi ... -o ymal` to learn more about your VM.
 
+
+## Check look & feel within the  VM
 From your computer, connect with `virtctl` and verify bootc and Apache:
 
 ```bash
 virtctl -n "$PROJECT" ssh -i ~/.ssh/id_techquest cloud-user@vmi/rhel10imagemode
 ```
 
-Inside the VM:
+Inside the VM vheck the status of bootc.
 
 ```bash
 sudo bootc status
+```
+This should show you the current boot system, current container being started. As you never updated there is no previus container to roll back to nor a newer one to boot from. 
+
+Also look at the output of your local webbrowser, for reference. 
+```bash
 curl localhost
 ```
 
@@ -317,7 +337,7 @@ curl localhost
 You can upload the image with the following command:
 
 ```bash
-podman push --tls-verify=false image-registry.openshift-image-registry.svc:5000/mtv-userX/bootc_image
+podman push --tls-verify=false image-registry.openshift-image-registry.svc:5000/mtv-userID/bootc_image
 ```
 
 SOLUTION:
@@ -328,82 +348,10 @@ podman push --tls-verify=false image-registry.openshift-image-registry.svc:5000/
 ```
 
 transformation of the bootc container image into a qcow2 image
-Cost 8
 
-```bash
-podman run  --tls-verify=false --privileged  --volume ./output:/output  --volume ./config.json:/config.json --volume /var/lib/containers/storage:/var/lib/containers/storage image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.2  --type qcow2  --config /config.json image-registry.openshift-image-registry.svc:5000/mtv-userX/bootc_image --output /output
-```
 
 SOLUTION:
 
 ```bash
 podman run --tls-verify=false --privileged  --volume ./output:/output  --volume ./config.json:/config.json --volume /var/lib/containers/storage  image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.2 --type qcow2 --config /config.json image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10 --output /output
 ```
-
-qcow2 image upload
-Cost 3
-
-You need the command
-
-```bash
-virtctl image-upload dv ....
-```
-
-qcow2 image upload
-Cost 7
-
-To upload the image to a datavolume called rhel10image, the command would look like this:
-
-```bash
-virtctl image-upload dv rhel10image --size=12Gi  --image-path=output/qcow2/disk.qcow2 --storage-class=ocs-external-storagecluster-ceph-rbd --insecure --force-bind
-```
-
-SOLUTION:
-
-```bash
-virtctl image-upload dv rhel10image --size=12Gi  --image-path=output/qcow2/disk.qcow2 --storage-class=ocs-external-storagecluster-ceph-rbd --insecure --force-bind
-```
-
-Create a new image-mode VM
-Cost 2
-
-creating a OCP VM at CLI is a 2 step process:
-use `virtctl create vm...` to create a yaml file.
-Use `oc create -f <this yaml file> ...` to create the VM.
-
-IMPORTANT:
-
-Ensure the VM to be created in your project `mtv-userX`
-
-Ensure ssh key injection
-Cost 3
-
-`cat cloud.init.txt`
-
-```yaml
-#cloud-config
-ssh_authorized_keys:
-     - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINPbf8p7KeyYIj3eKEkbvvdZ43lTFahqOIZBobXse2wa techquest2025
-```
-
-`CLOUD_INIT_USERDATA=$(base64 -w 0 cloud.init.txt)`
-`virtctl create vm ...  --cloud-init configdrive  --cloud-init-user-data $CLOUD_INIT_USERDATA`
-
-Create new image-mode VM
-Cost 5
-
-`virtctl create vm --instancetype u1.small --name rhel10imagemode --volume-import type:pvc,src:mtv-userX/rhel10image,name:rhel10imagemode --cloud-init configdrive  --cloud-init-user-data $CLOUD_INIT_USERDATA  | oc create -f - -n mtv-userX`
-
-while:
-
-- `rhel10imagemode` is the name of the VM to be built.
-- `rhel10image` is the name of the DV you uploaded the qcow image into.
-
-SOLUTION:
-
-```bash
-CLOUD_INIT_USERDATA=$(base64 -w 0 cloud.init.txt)
-echo $CLOUD_INIT_USERDATA
-virtctl create vm --instancetype u1.small --name rhel10imagemode --volume-import type:pvc,src:mtv-user1/rhel10image,name:rhel10imagemode --cloud-init configdrive  --cloud-init-user-data $CLOUD_INIT_USERDATA  | oc create -f - -n mtv-user1
-```
-
