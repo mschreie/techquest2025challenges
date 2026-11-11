@@ -9,4 +9,4 @@
 - import_playbook: 04_create_imagemodevm.yml
 - import_playbook: 05_start_prep_vms.yml
 - import_playbook: 06_prepare_util.yml
-- import_playbook: 08_publish_labguide.yml
+- import_playbook: 07_publish_labguide.yml
