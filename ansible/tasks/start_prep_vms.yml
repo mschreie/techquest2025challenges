@@ -12,7 +12,7 @@
 
 - name: Add each participant image mode VM
   ansible.builtin.set_fact:
-    vm_targets: "{{ vm_targets + [{'name': 'rhel10imagemode', 'namespace': 'mtv-user' ~ item}] }}"
+    vm_targets: "{{ vm_targets + [{'name': 'prep10imagemode', 'namespace': 'mtv-user' ~ item}] }}"
   loop: "{{ user_ids }}"
 
 - name: Check which prepared VMs exist
