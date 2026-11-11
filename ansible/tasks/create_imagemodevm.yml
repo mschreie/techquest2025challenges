@@ -48,6 +48,8 @@
         print "            user: cloud-user"
         print "            password: redhat"
         print "            chpasswd: { expire: False }"
+        print "            runcmd:"
+        print "              - systemctl enable --now httpd"
         print "        name: cloudinitdisk"
         print
         next
