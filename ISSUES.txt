@@ -1,17 +1,14 @@
 # TODOs
-- Number Playbooks (00, 01,...) - Aina 
-- Test Playbooks - Markus - DONE and updated to multicluster usage.
-- Decide on Playbooks / Scripts - Markus - yes, we stick with the playbooks.
-- Prepare Image Mode VM - As emergency if Step 1 cannot be completed - ASAP - Playbook schreiben - Aina
-	STATUS: There is a image mode VM available, and documented. Deployment is automated. BUT it does not include a running http-server yet. 
-	TODO: change the image definition in the repository to include the httpd server up and running. 
-- Credentials in Lab Guide - STATUS: DONE
+- Rename Imagemode VM to prep10imagemode (im Automatisierung) - Aina 
+- switch off imagemode VM (in Automatisierung) - Aina
+- shell skripte löschen
+- Prepare Image Mode VM - As emergency if Step 1 cannot be completed 
+	STATUS: There is a image mode VM available, and documented. Deployment is automated. 
+	DONE 
 - Improve Lab Guide - STATUS: started
-	01 done till "## Check the VM"
+	01 done 
 	02 not started at all
 - Document tiny-URL / QR Code: https://mo-hub.apps.int.spoke.prod.us-east-1.aws.paas.redhat.com/ (needs VPN)
-- Mention Daniel's Lab in our presentation - STATUS: Started but slide needs improvement.
-- Try multi-cluster - STATUS: DONE 
 
 # TODOs before LAB starts
 - Tiny-URL / QR Code: https://mo-hub.apps.int.spoke.prod.us-east-1.aws.paas.redhat.com/
