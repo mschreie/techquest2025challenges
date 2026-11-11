@@ -1,4 +1,11 @@
-# The image mode VM is up and running. Great
+# Update an existing RHEL 10 Image Mode - VM
+
+[back](/)
+
+## The Ask - in short
+Change sth in the container image by changing the Containerfile and building a new image. Upload this image to the same location as the previous and use this image as an update to your existing image mode VM.
+This exersize can be fullfilled by eitehr using the VM you built in the previous step or take the one we prepared for you (rhel10imagemode)
+
 
 You can find the ip-addresses of your VMs like this:
 oc get vmi -n mtv-user1 -o wide
