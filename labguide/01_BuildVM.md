@@ -230,6 +230,7 @@ The above step may take some time. So please execute the command before reviewin
 | `--config /config.json` | where within the container the config file is found |
 | `"image-registry.openshift-image-registry.svc:5000/${PROJECT}/myrhel10:latest"` | The image which should be converted |
 | `--output /output` | where within the container the output should be placed. As this dir is mounted form outside the container it will persistent after the container exited |
+```
 
 After the conversion finished, you should find a qcow image:
 ```bash
@@ -330,28 +331,4 @@ This should show you the current boot system, current container being started. A
 Also look at the output of your local webbrowser, for reference. 
 ```bash
 curl localhost
-```
-
-`podman images`.
-
-You can upload the image with the following command:
-
-```bash
-podman push --tls-verify=false image-registry.openshift-image-registry.svc:5000/mtv-userID/bootc_image
-```
-
-SOLUTION:
-
-```bash
-podman tag localhost/myrhel10:latest image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10:latest
-podman push --tls-verify=false image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10:latest
-```
-
-transformation of the bootc container image into a qcow2 image
-
-
-SOLUTION:
-
-```bash
-podman run --tls-verify=false --privileged  --volume ./output:/output  --volume ./config.json:/config.json --volume /var/lib/containers/storage  image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.2 --type qcow2 --config /config.json image-registry.openshift-image-registry.svc:5000/mtv-user1/myrhel10 --output /output
 ```
