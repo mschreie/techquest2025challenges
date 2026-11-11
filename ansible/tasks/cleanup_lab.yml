@@ -14,7 +14,7 @@
 
 - name: Add each participant thesource VM to the cleanup list
   ansible.builtin.set_fact:
-    vm_targets: "{{ vm_targets + [{'name': 'thesource', 'namespace': 'mtv-user' ~ item}] }}"
+    vm_targets: "{{ vm_targets + [{'name': 'prep10imagemode', 'namespace': 'mtv-user' ~ item}] }}"
   loop: "{{ range(1, max_users + 1) | list }}"
 
 - name: Add each participant image-mode VM to the cleanup list
@@ -197,7 +197,7 @@
       - '{"metadata":{"finalizers":[]}}'
   environment:
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-  loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode']) | list }}"
+  loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode', 'prep10imagemode']) | list }}"
   loop_control:
     label: "Strip finalizer mtv-user{{ item.0 }}/{{ item.1 }}"
   when: confirm_cleanup | bool
@@ -217,7 +217,7 @@
       - --wait=false
   environment:
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-  loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode']) | list }}"
+  loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode', 'prep10imagemode']) | list }}"
   loop_control:
     label: "mtv-user{{ item.0 }}/{{ item.1 }}"
   when: confirm_cleanup | bool
@@ -238,7 +238,7 @@
       - '{"metadata":{"finalizers":[]}}'
   environment:
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-  loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode']) | list }}"
+  loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode', 'prep10imagemode']) | list }}"
   loop_control:
     label: "Strip PVC finalizer mtv-user{{ item.0 }}/{{ item.1 }}"
   when: confirm_cleanup | bool
@@ -258,7 +258,7 @@
       - --wait=false
   environment:
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-  loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode']) | list }}"
+  loop: "{{ user_ids | product(['rhel10image', 'rhel10imagemode', 'prep10imagemode']) | list }}"
   loop_control:
     label: "mtv-user{{ item.0 }}/{{ item.1 }}"
   when: confirm_cleanup | bool
