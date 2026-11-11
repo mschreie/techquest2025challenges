@@ -1,12 +1,16 @@
 # TODOs
 - Rename Imagemode VM to prep10imagemode (im Automatisierung) - Aina 
-	DONE. Updated in: ansible/tasks/create_imagemodevm.yml, ansible/tasks/start_prep_vms.yml and ansible/cleanup_lab.yml
+	DONE. Updated in: ansible/tasks/create_imagemodevm.yml, ansible/tasks/start_prep_vms.yml and ansible/tasks/cleanup_lab.yml
 - switch off imagemode VM (in Automatisierung) - Aina
 - shell skripte löschen
 	DONE
 - Prepare Image Mode VM - As emergency if Step 1 cannot be completed 
 	STATUS: There is a image mode VM available, and documented. Deployment is automated. 
 	DONE: Removed httpd installation from the initial Containerfile so both prep10imagemode and rhel10imagemode start without a web server. This ensures users in 	step 02_UpdateVM install and enable Apache via bootc upgrade. Deployment of prep10imagemode is fully automated in prepare_all.yml
+- Try prepare_all.yml
+- Try cleanup_lab.yml
+- Read Lab Guide
+- rhsm Error
 - Improve Lab Guide - STATUS: started
 	01 done 
 	02 not started at all
