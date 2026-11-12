@@ -24,7 +24,6 @@
 - Run Playbooks
 
 - Upload containerfile
-- cleanup lab
 - start prep vms
 - create image mode vm
 - publish labguide
