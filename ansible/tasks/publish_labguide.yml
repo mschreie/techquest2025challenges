@@ -105,9 +105,9 @@
         install -m 0640 -o root -g apache /home/cloud-user/credentials.yaml /var/www/credentials/credentials.yaml &&
         install -m 0644 -o root -g root /home/cloud-user/credentials.conf /etc/httpd/conf.d/credentials.conf &&
         rm -f /home/cloud-user/credentials.yaml /home/cloud-user/credentials.cgi /home/cloud-user/credentials.conf /var/www/html/credentials.yaml &&
-        restorecon -R /var/www/cgi-bin/credentials.cgi /var/www/credentials /etc/httpd/conf.d/credentials.conf &&
-        if ! getsebool httpd_enable_cgi | grep -q " --> on"; then setsebool -P httpd_enable_cgi on; fi &&
-        apachectl configtest && systemctl reload httpd'
+        (restorecon -R /var/www/cgi-bin/credentials.cgi /var/www/credentials /etc/httpd/conf.d/credentials.conf 2>/dev/null || true) &&
+        if command -v getsebool >/dev/null 2>&1 && ! getsebool httpd_enable_cgi | grep -q " --> on"; then setsebool -P httpd_enable_cgi on || true; fi &&
+        /usr/sbin/httpd -t && systemctl enable --now httpd && systemctl reload httpd'
   environment:
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
   changed_when: true
@@ -121,7 +121,7 @@
         --local-ssh-opts="-o UserKnownHostsFile={{ ssh_known_hosts }}" \
         --local-ssh-opts='-o StrictHostKeyChecking=accept-new' \
         -i "{{ ssh_key }}" \
-        -c 'sudo tar -xf - -C /var/www/html && sudo rm -f /var/www/html/credentials.yaml && sudo restorecon -R /var/www/html' \
+        -c 'sudo tar -xf - -C /var/www/html && sudo rm -f /var/www/html/credentials.yaml && (sudo restorecon -R /var/www/html 2>/dev/null || true)' \
         cloud-user@vmi/util
   args:
     executable: /bin/bash
