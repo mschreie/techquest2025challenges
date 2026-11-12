@@ -89,7 +89,7 @@ Because `/usr` is read-only on an Image Mode VM, you cannot run `dnf install htt
 
 1. **Log in to OpenShift and the internal container registry**:
    ```bash
-   oc login -u "$MYUID" "[https://api.cluster-](https://api.cluster-)${MYCID}.dyn.redhatworkshops.io:6443"
+    oc login -u "$MYUID" "https://api.cluster-${MYCID}.dyn.redhatworkshops.io:6443"
    oc project "$PROJECT"
 
    oc whoami -t | podman login --tls-verify=false \
@@ -129,7 +129,7 @@ Because `/usr` is read-only on an Image Mode VM, you cannot run `dnf install htt
    MYCID={clusterID}
    PROJECT="mtv-$MYUID"
 
-   oc login -u "$MYUID" "[https://api.cluster-](https://api.cluster-)${MYCID}.dyn.redhatworkshops.io:6443"
+   oc login -u "$MYUID" "https://api.cluster-${MYCID}.dyn.redhatworkshops.io:6443"
 
    oc whoami -t | podman login --tls-verify=false \
        -u "$(oc whoami)" --password-stdin \
