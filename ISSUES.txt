@@ -23,6 +23,24 @@
 - Multi-cluster
 - Run Playbooks
 
+ÄNDERUNGEN:
+00_login.sh, 01_create_vms.sh, 01_UNDO_delete_vms.sh, 02_ssh_prep_vms.sh, 03_create_utilVM.sh, 10_UpdateLabGuide, prepRegistry.sh: Alte Bash-Skripte entfernt, da die gesamte Automatisierung auf Ansible umgestellt wurde.
+
+prepare_all.yml, prepare_registry.yml, /ansible: Playbooks mit Nummern umbenannt und den zentralen Gesamtablauf (prepare_all.yml) neu strukturiert.
+
+start_prep_vms.yml: prep10imagemode angepasst.
+cleanup_lab.yml: prep10imagemode angepasst.
+create_imagemodevm.yml: prep10imagemode angepasst.
+
+ContainerFile: Apache (httpd) entfernt, damit rhel10imagemode und prep10imagemode VMs ohne Webserver starten und die Teilnehmer httpd erst im zweiten Schritt per bootc upgrade installieren können (02_UpdateVM.md).
+
+publish_labguide.yml: SSH-Optionen und dynamische Pfad-/Cluster-Variablen für die Veröffentlichung des Lab-Guides auf util korrigiert.
+md2html & markdown.conf: Konvertierung und Styling für die HTML-Generierung des Lab-Guides verbessert.
+01_BuildVM.md: Befehls- und Formatierungsdetails in der Build-Anleitung bereinigt. Fallback-Abschnitt hinzugefügt (prep10imagemode): Am Ende der Anleitung Schritte ergänzt, wie Teilnehmer, die bei Lab 1 nicht fertig werden oder hängen bleiben, die vorbereitete Backup-VM (prep10imagemode) starten, abwarten, per SSH verbinden und mit sudo bootc status überprüfen können.
+02_UpdateVM.md: Alten Inhalt unten beibehalten & neue Anleitung darüber eingefügt: Update 1 — Atomare Installation von Apache (httpd) & Update 2 — Zweite Übung zum Aktualisieren des Login-Banners (/etc/motd) über das Containerfile.
+
+
+
 - Upload containerfile
 - start prep vms
 - create image mode vm
