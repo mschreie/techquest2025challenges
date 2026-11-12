@@ -6,7 +6,7 @@
     fail_msg: Set IMAGEMODEVMURL in env.sh.
 
 - name: Check whether each image mode VM already exists
-  ansible.builtin.command: oc get vm rhel10imagemode -n mtv-user{{ item }}
+  ansible.builtin.shell: oc get vm prep10imagemode -n "mtv-user{{ item }}" >/dev/null 2>&1 || oc get vm rhel10imagemode -n "mtv-user{{ item }}" >/dev/null 2>&1
   loop: "{{ range(1, max_users + 1) | list }}"
   loop_control:
     label: "mtv-user{{ item }}"
@@ -48,8 +48,6 @@
         print "            user: cloud-user"
         print "            password: redhat"
         print "            chpasswd: { expire: False }"
-        print "            runcmd:"
-        print "              - systemctl enable --now httpd"
         print "        name: cloudinitdisk"
         print
         next
@@ -70,22 +68,32 @@
   changed_when: true
 
 - name: Wait until each image mode VMI is Ready
-  ansible.builtin.command:
-    argv:
-      - oc
-      - wait
-      - --for=condition=Ready
-      - vmi/prep10imagemode
-      - -n
-      - "mtv-user{{ item }}"
-      - --timeout=60s
+  ansible.builtin.shell: oc wait --for=condition=Ready vmi/prep10imagemode -n "mtv-user{{ item }}" --timeout=60s 2>/dev/null || oc wait --for=condition=Ready vmi/rhel10imagemode -n "mtv-user{{ item }}" --timeout=60s
   environment:
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-  loop: "{{ user_ids }}"
+  loop: "{{ range(1, max_users + 1) | list }}"
   loop_control:
+    index_var: user_index
     label: "mtv-user{{ item }}"
+  when: vm_checks.results[user_index].rc != 0
   register: imagemode_ready
   until: imagemode_ready.rc == 0
   retries: 30
   delay: 60
   changed_when: false
+
+- name: Switch off prep10imagemode VMs to save cluster resources until needed
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - stop
+      - prep10imagemode
+      - -n
+      - "mtv-user{{ item }}"
+  environment:
+    PATH: "{{ repo_dir }}:{{ repo_dir }}/bin:{{ lookup('env', 'PATH') }}"
+  loop: "{{ range(1, max_users + 1) | list }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  failed_when: false
+  changed_when: true
