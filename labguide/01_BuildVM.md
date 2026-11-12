@@ -328,11 +328,6 @@ sudo bootc status
 ```
 This should show you the current boot system, current container being started. As you never updated there is no previus container to roll back to nor a newer one to boot from. 
 
-Also look at the output of your local webbrowser, for reference. 
-```bash
-curl localhost
-```
-
 ---
 
 ## Fallback: If you got stuck or did not finish
