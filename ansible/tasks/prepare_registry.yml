@@ -1,29 +1,23 @@
 ---
+- name: Ensure the internal registry defaultRoute is enabled
+  ansible.builtin.command:
+    argv:
+      - oc
+      - patch
+      - configs.imageregistry.operator.openshift.io/cluster
+      - --type=merge
+      - -p
+      - '{"spec":{"defaultRoute":true}}'
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  changed_when: false
+
 - name: Build registry script input for this cluster
   ansible.builtin.set_fact:
     registry_input: "{{ cluster_id }}\n{{ admin_password }}\n{{ registry_user }}\n{{ registry_token }}"
   no_log: true
 
-- name: Copy the current prepRegistry script to util
-  ansible.builtin.command:
-    argv:
-      - virtctl
-      - -n
-      - default
-      - scp
-      - --known-hosts
-      - "{{ ssh_known_hosts }}"
-      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
-      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
-      - -i
-      - "{{ ssh_key }}"
-      - "{{ repo_dir }}/prepRegistry.sh"
-      - cloud-user@vmi/util:prepRegistry.sh
-  environment:
-    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
-  changed_when: true
-
-- name: Pull and push the required images
+- name: Pull required bootc images and push them to the internal OpenShift registry
   ansible.builtin.command:
     argv:
       - virtctl
@@ -31,17 +25,60 @@
       - default
       - ssh
       - --known-hosts
-      - "{{ ssh_known_hosts }}"
-      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
-      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - /dev/null
+      - --local-ssh-opts=-o StrictHostKeyChecking=no
+      - --local-ssh-opts=-o UserKnownHostsFile=/dev/null
+      - --local-ssh-opts=-o LogLevel=ERROR
       - -i
       - "{{ ssh_key }}"
       - cloud-user@vmi/util
       - -c
-      - "bash -c 'IFS= read -r CLUSTERID; IFS= read -r ADMIN_PW; IFS= read -r REGISTRY_USER; IFS= read -r MYPW; export CLUSTERID ADMIN_PW REGISTRY_USER MYPW; bash ~/prepRegistry.sh'"
+      - |
+        bash -c '
+        set -euo pipefail
+        IFS= read -r CLUSTERID
+        IFS= read -r ADMIN_PW
+        IFS= read -r REGISTRY_USER
+        IFS= read -r MYPW
+
+        echo "$MYPW" | podman login -u "$REGISTRY_USER" --password-stdin registry.redhat.io
+
+        podman pull registry.redhat.io/rhel10/bootc-image-builder:10.2
+        podman pull registry.redhat.io/rhel10/rhel-bootc:10.2
+        podman pull quay.io/hummingbird-community/bootc-os:sha256-46869af272cd10dc08f6cd8c1d8cdd9b8906a64002b33e13c97a04b55be44efc
+        podman tag quay.io/hummingbird-community/bootc-os:sha256-46869af272cd10dc08f6cd8c1d8cdd9b8906a64002b33e13c97a04b55be44efc quay.io/hummingbird-community/bootc-os:mylatest
+
+        oc login --insecure-skip-tls-verify=true -u admin -p "$ADMIN_PW" "https://api.cluster-${CLUSTERID}.dyn.redhatworkshops.io:6443"
+        oc whoami -t | podman login --tls-verify=false -u kubeadmin --password-stdin image-registry.openshift-image-registry.svc:5000
+
+        podman push --remove-signatures --tls-verify=false registry.redhat.io/rhel10/bootc-image-builder:10.2 image-registry.openshift-image-registry.svc:5000/openshift/bootc-image-builder:10.2
+        podman push --remove-signatures --tls-verify=false registry.redhat.io/rhel10/rhel-bootc:10.2 image-registry.openshift-image-registry.svc:5000/openshift/rhel-bootc:10.2
+        podman push --remove-signatures --tls-verify=false quay.io/hummingbird-community/bootc-os:mylatest image-registry.openshift-image-registry.svc:5000/openshift/bootc-os:mylatest
+
+        podman rmi -a -f || true
+        podman logout registry.redhat.io || true
+        podman logout image-registry.openshift-image-registry.svc:5000 || true
+        '
     stdin: "{{ registry_input }}"
   environment:
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
   register: image_copy
   changed_when: true
   no_log: true
+
+- name: Verify required bootc images exist in the openshift namespace
+  ansible.builtin.command:
+    argv:
+      - oc
+      - get
+      - imagestreamtag
+      - "{{ item }}"
+      - -n
+      - openshift
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop:
+    - "rhel-bootc:10.2"
+    - "bootc-image-builder:10.2"
+    - "bootc-os:mylatest"
+  changed_when: false
