@@ -159,7 +159,7 @@ podman push --tls-verify=false \
     "image-registry.openshift-image-registry.svc:5000/${PROJECT}/myrhel10:latest"
 ```
 
-## optional - Run OS container as a container for testing and QA
+## Optional - Run OS container as a container for testing and QA
 Now we have a container image (as any other container image) but it holds a full operating system inside. As an optional step you can now test this OS-container like a classical container in your container runtime environmet by running it:
 
 ```bash
