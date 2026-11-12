@@ -13,6 +13,7 @@
 - Try cleanup_lab.yml
 	DONE.
 - Read Lab Guide
+	DONE.
 - Improve Lab Guide - STATUS: started
 	01 DONE. I added the prep10imagemode part. 
 	02 not started at all
