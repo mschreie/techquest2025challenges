@@ -1,4 +1,4 @@
-# Lab 2: Atomic Updates & Patching with RHEL Image Mode (`bootc`)
+# Atomic Updates & Patching with RHEL Image Mode (`bootc`)
 
 [back](/)
 
