@@ -39,13 +39,8 @@ md2html & markdown.conf: Konvertierung und Styling für die HTML-Generierung des
 01_BuildVM.md: Befehls- und Formatierungsdetails in der Build-Anleitung bereinigt. Fallback-Abschnitt hinzugefügt (prep10imagemode): Am Ende der Anleitung Schritte ergänzt, wie Teilnehmer, die bei Lab 1 nicht fertig werden oder hängen bleiben, die vorbereitete Backup-VM (prep10imagemode) starten, abwarten, per SSH verbinden und mit sudo bootc status überprüfen können.
 02_UpdateVM.md: Alten Inhalt unten beibehalten & neue Anleitung darüber eingefügt: Update 1 — Atomare Installation von Apache (httpd) & Update 2 — Zweite Übung zum Aktualisieren des Login-Banners (/etc/motd) über das Containerfile.
 
-
-
-- Upload containerfile
-- start prep vms
-- create image mode vm
-- publish labguide
-- run clean and prepare all again
+prepare_all.yml und cleanup_lab.yml: mehrfach komplett durchlaufen lassen – der gesamte Auf- und Abbau funktioniert 
+Lab-Guides (01_BuildVM und 02_UpdateVM): Ich habe sie als user1 durchgespielt, dabei noch offene Stellen und Befehle korrigiert und die Anleitungen so überarbeitet, dass für die Teilnehmer alles klar und verständlich ist.   
 
 # List of things to improve or to change
 
