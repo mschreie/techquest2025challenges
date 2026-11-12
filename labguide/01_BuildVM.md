@@ -5,28 +5,28 @@
 ## The Ask - in short
 You need to create a bootc container image for a new VM which needs to be uploaded in local registry. For the initial boot, you need to transfer it into a qcow2 image, upload that into OCP-V from which you create a image mode based VM.
 
-## Prerequisits
-a laptop with:
-- Linux with ARM 64
-- Linux with x86_64
-- MAC with ARM 64
-- MAC with x86_64
-- Windows with x86_64
-and: 
-- ssh capable cmd-line interface (shell, putty, etc.)
-- the rights to copy and execute executables onto the system. 
+## Prerequisites
 
+A laptop meeting the following requirements:
+* **Supported operating systems and architectures:**
+  * Linux (`x86_64` or `ARM64`)
+  * macOS (`x86_64` or `ARM64`)
+  * Windows (`x86_64`)
+* **Local environment requirements:**
+  * An SSH-capable command-line interface (e.g., Bash, Zsh, or PuTTY)
+  * Local permissions to download and execute CLI binaries (`oc` and `virtctl`)
+    
 ## Preparation
 
-### tools on your laptop
+### Tools on your laptop
 You need a command line interface which is ssh capable. There you need `virtctl` and  `oc` bindary. If you do not have these binary  commands,  you can download them from :  
 `https://console-openshift-console.apps.cluster-${MYCID}.dyn.redhatworkshops.io/command-line-tools` (login with your userID as found in [credentials.html](credentials.html) and add them in some directoy which is searched by your PATH -settings.  
 
-### non signed certificates
+### Non signed certificates
 As our environment does not have officially signed certificates you might need 
 `--tls-verify=false` added to your commands pulling or pushing sth to a registry or repository.  
 
-### ssh key
+### Ssh key
 Use the following **private ssh-key** to login:
 ```text
     cat ~/.ssh/id_techquest    
@@ -52,7 +52,7 @@ This reveals `cluster id` used to identify your OCP cluster. You will also find 
 ```text
 https://console-openshift-console.apps.cluster-{clusterID}.dyn.redhatworkshops.io/
 ```
-CMDLine login to your VM from where you do the work:
+**CMD-Line** login to your VM from where you do the work:
 ```bash
 oc login -u {userID} -p {password} https://api.cluster-{clusterID}.dyn.redhatworkshops.io:6443/
 virtctl ssh -i ~/.ssh/id_techquest cloud-user@vmi/thesource                       
@@ -332,3 +332,33 @@ Also look at the output of your local webbrowser, for reference.
 ```bash
 curl localhost
 ```
+
+---
+
+## Fallback: If you got stuck or did not finish
+
+If you ran into issues building or uploading your image and cannot get `rhel10imagemode` running in time for the next lab, a pre-built backup VM named **`prep10imagemode`** is already provisioned in your project (`$PROJECT`).
+
+To save cluster resources, this backup VM is **switched off** by default. Follow these steps to start and connect to it:
+
+1. **Start the backup VM** from your laptop terminal (or from the OpenShift Web Console under **Virtualization → VirtualMachines**):
+   ```bash
+   virtctl start prep10imagemode -n "$PROJECT"
+   ```
+
+2. **Wait for the VM to boot and become Ready:**
+   ```bash
+   oc wait --for=condition=Ready vmi/prep10imagemode -n "$PROJECT" --timeout=5m
+   ```
+
+3. **Connect to the backup VM via SSH** using the workshop key:
+   ```bash
+   virtctl -n "$PROJECT" ssh -i ~/.ssh/id_techquest cloud-user@vmi/prep10imagemode
+   ```
+
+4. **Verify `bootc` status** inside `prep10imagemode`:
+   ```bash
+   sudo bootc status
+   ```
+
+> **Note for the next lab:** If you use this fallback VM, remember to replace `rhel10imagemode` with **`prep10imagemode`** in the SSH connection commands during the update exercise.
