@@ -6,7 +6,7 @@
     fail_msg: Set IMAGEMODEVMURL in env.sh.
 
 - name: Check whether each image mode VM already exists
-  ansible.builtin.shell: oc get vm prep10imagemode -n "mtv-user{{ item }}" >/dev/null 2>&1 || oc get vm rhel10imagemode -n "mtv-user{{ item }}" >/dev/null 2>&1
+  ansible.builtin.command: oc get vm prep10imagemode -n mtv-user{{ item }}
   loop: "{{ range(1, max_users + 1) | list }}"
   loop_control:
     label: "mtv-user{{ item }}"

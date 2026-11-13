@@ -3,6 +3,10 @@
   ansible.builtin.set_fact:
     credentials_data: "{{ lookup('file', credentials_file) | from_yaml }}"
 
+- name: Debug credentials_data
+  debug:
+    var: credentials_data
+
 - name: Build the participant usernames expected from MAXUSER
   ansible.builtin.set_fact:
     expected_users: "{{ range(1, (max_users | int) + 1) | map('string') | map('regex_replace', '^', 'user') | list }}"
@@ -19,9 +23,33 @@
       Publishing continues.
   when: credential_cluster_ids | sort != cluster_ids | sort
 
-- name: Collect usernames published for this cluster
+- name: Start with an empty username list for this cluster
   ansible.builtin.set_fact:
-    cluster_usernames: "{{ credentials_data.data | dict2items | selectattr('key', 'search', '\\.cid$') | selectattr('value', 'equalto', cluster_id) | map(attribute='key') | map('regex_replace', '\\.cid$', '.uid') | map('extract', credentials_data.data) | unique | sort | list }}"
+    cluster_usernames: []
+    teams_missing_uid: []
+
+- name: Record usernames for teams that have both a cluster id and a user id
+  ansible.builtin.set_fact:
+    cluster_usernames: "{{ cluster_usernames + [credentials_data.data[item.key | regex_replace('\\.cid$', '.uid')]] }}"
+  loop: "{{ credentials_data.data | dict2items | selectattr('key', 'search', '\\.cid$') | selectattr('value', 'equalto', cluster_id) | list }}"
+  when: (item.key | regex_replace('\\.cid$', '.uid')) in credentials_data.data
+
+- name: Record teams on this cluster that have no user id
+  ansible.builtin.set_fact:
+    teams_missing_uid: "{{ teams_missing_uid + [item.key | regex_replace('\\.cid$', '')] }}"
+  loop: "{{ credentials_data.data | dict2items | selectattr('key', 'search', '\\.cid$') | selectattr('value', 'equalto', cluster_id) | list }}"
+  when: (item.key | regex_replace('\\.cid$', '.uid')) not in credentials_data.data
+
+- name: Sort the usernames collected for this cluster
+  ansible.builtin.set_fact:
+    cluster_usernames: "{{ cluster_usernames | unique | sort }}"
+
+- name: Warn when a team has a cluster id but no user id
+  ansible.builtin.debug:
+    msg: >-
+      Warning: {{ item }} in credentials.yaml has no user id.
+      Publishing continues.
+  loop: "{{ teams_missing_uid }}"
 
 - name: Warn when this cluster's published users differ from MAXUSER
   ansible.builtin.debug:

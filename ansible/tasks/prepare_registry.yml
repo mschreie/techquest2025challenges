@@ -15,7 +15,6 @@
 - name: Build registry script input for this cluster
   ansible.builtin.set_fact:
     registry_input: "{{ cluster_id }}\n{{ admin_password }}\n{{ registry_user }}\n{{ registry_token }}"
-  no_log: true
 
 - name: Pull required bootc images and push them to the internal OpenShift registry
   ansible.builtin.command:
@@ -64,7 +63,6 @@
     PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
   register: image_copy
   changed_when: true
-  no_log: true
 
 - name: Verify required bootc images exist in the openshift namespace
   ansible.builtin.command:
