@@ -7,18 +7,24 @@
 In traditional Linux administration, updating servers means SSH-ing into running machines, running `dnf install` or `dnf update`, editing configuration files in place, and hoping nothing drifts over time.
 
 With **RHEL Image Mode (`bootc`)**, your entire operating system is managed like a cloud-native container:
+
 * The OS root filesystem (`/usr`) is **immutable** (read-only).
 * Every software installation or system configuration change happens declaratively inside a **`Containerfile`**.
 * Updates are delivered **atomically** as container image layers using `bootc upgrade`, complete with instant, built-in **rollback**.
 
 ---
+## Before you start: Where are you comming from?
+Have you done [Exersice 1](01_BuildVM.md) already?  
+In this case you have logged in to OpenShift and to the `thesource` VM.  
+If you did not please run through steps 2. to 7. in [Exersice 1](01_BuildVM.md) to login and prepare your environment and then come back here
 
 ## Before You Start: Which VM Should You Use?
 
 By now, you should have a RHEL 10 Image Mode VM ready in your OpenShift project (`mtv-$MYUID`):
 
 * **Did you complete Lab 1?** Use the VM you built yourself: **`rhel10imagemode`**.
-* **Did you get stuck or run out of time in Lab 1?** No problem at all! Use the pre-provisioned backup VM already sitting in your namespace: **`prep10imagemode`**. *(Remember: `prep10imagemode` is switched off by default to save cluster resources, so start it first if you haven't already.)*
+* **Did you get stuck or run out of time in Lab 1?** No problem at all! Use the pre-provisioned backup VM already sitting in your namespace: **`prep10imagemode`**. *(Remember: `prep10imagemode` is switched off by default to save cluster resources, so start it first if you haven't already (see below).)*
+
 
 > **Important:** Both `rhel10imagemode` and `prep10imagemode` start out as minimal RHEL 10 Image Mode systems **without a web server (`httpd`) installed**. In this lab, you will install Apache atomically by updating your container image!
 

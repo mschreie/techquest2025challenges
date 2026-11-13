@@ -2,12 +2,13 @@
 
 [back](/)
 
-## The Ask - in short
+## 1. The Ask - in short
 You need to create a bootc container image for a new VM which needs to be uploaded in local registry. For the initial boot, you need to transfer it into a qcow2 image, upload that into OCP-V from which you create a image mode based VM.
 
-## Prerequisites
+## 2. Prerequisites
 
 A laptop meeting the following requirements:
+
 * **Supported operating systems and architectures:**
   * Linux (`x86_64` or `ARM64`)
   * macOS (`x86_64` or `ARM64`)
@@ -16,7 +17,7 @@ A laptop meeting the following requirements:
   * An SSH-capable command-line interface (e.g., Bash, Zsh, or PuTTY)
   * Local permissions to download and execute CLI binaries (`oc` and `virtctl`)
     
-## Preparation
+## 3. Preparation
 
 ### Tools on your laptop
 You need a command line interface which is ssh capable. There you need `virtctl` and  `oc` bindary. If you do not have these binary  commands,  you can download them from :  
@@ -43,7 +44,7 @@ On a MAC as well as on RHEL this file consists of 7 distinct lines.  In most env
 And might also need to ensure seLinux attributs are set correctly:
 `restorecon -R ~/.ssh`
 
-## Login to your builderVM called `thesource`
+## 4. Login to your builderVM called `thesource`
 In the following a capital X stands for your team number.  
 To receive all user-specific information type your team number into [credentials.html](credentials.html)
 This reveals `cluster id` used to identify your OCP cluster. You will also find a UserID and a password.          
@@ -66,7 +67,7 @@ Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
 Warning: Permanently added 'vmi.thesource.mtv-user2' (ED25519) to the list of known hosts.
 ```
 
-## Preparation within the `thesource` VM
+## 5. Preparation within the `thesource` VM
 Switch to root and into the prepared container build directory:
 ```bash
 sudo -i 
@@ -81,7 +82,7 @@ PROJECT="mtv-$MYUID"
 ```
 Hint: replace {userID} and {clusterID} with the values provided by [credentials.html](credentials.html). But leave the last line as it is.
 
-## Log in to the cluster and internal registry 
+## 6. Log in to the cluster
 
 The OpenShift login on your computer is not shared with `thesource`. Log in again inside the VM. `oc login` prompts for your password:
 
@@ -107,7 +108,7 @@ Some commands which might help you:
 |`oc get route`| get list of network routes (reachable form the outside defined in this project|
 Hint: you should find 2 VMs (`thesource` and `rhel10imagemode`). `thesource` is the one you logged into via ssh. The other one will only be needed as a fallback and should be switched off.
 
-## Log in to the internal registry 
+## 7. Log in to the internal registry 
 Use `podman` command to log in to the internal registry using a token provided from oc 
 ```bash
 oc whoami -t | podman login --tls-verify=false \
@@ -117,15 +118,15 @@ oc whoami -t | podman login --tls-verify=false \
 `oc whoami -t` provides a token on STDOUT and forwards it to STDIN of the following command.\n\n
 podman login separately authenticates to the local image registry using the username `oc whoami` provides and the token found at STDIN.
 
-## Build the bootc container image 
+## 8. Build the bootc container image 
 
 Please inspect the directory you are in. You should find a `Containerfile` which defines how the container is to be built. This file will need some adoption later.  You will also find a `config.json` which defines the user and password to log into the to be built image mode VM and some other files to ensure things will work smoothly.
 
 The first line of `Containerfile` must use the bootc base image URL provided from the cluster's internal registry:\n\n
-The URL is assembled as: registry/namespace/imagename\n\n
-Registry: `image-registry.openshift-image-registry.svc:5000`\n\n
-Namespace: `/openshift`\n\n
-Imagename: `/rhel-bootc:10.2`\n\n
+The URL is assembled as: registry/namespace/imagename  
+Registry: `image-registry.openshift-image-registry.svc:5000`  
+Namespace: `/openshift`  
+Imagename: `/rhel-bootc:10.2`  
 
 
 ```dockerfile
@@ -133,9 +134,8 @@ FROM image-registry.openshift-image-registry.svc:5000/openshift/rhel-bootc:10.2
 
 ADD etc /etc
 
-RUN dnf install -y httpd cloud-init qemu-guest-agent
+RUN dnf install -y cloud-init qemu-guest-agent
 RUN sed -i -e '$aPermitRootLogin yes' /etc/ssh/sshd_config
-RUN systemctl enable httpd
 ```
 
 Check it, then build from the current directory (`.`):
@@ -147,7 +147,7 @@ podman images
 ```
 The last command `podman images` should show a image named localhost/myrhel10:latest. This is in the image registry on the local system (in our case `thesource` VM).
 
-## Upload the bootc image
+## 9. Upload the bootc image
 
 Tag it with the to be name and internal registry location and push it there:
 
@@ -159,7 +159,7 @@ podman push --tls-verify=false \
     "image-registry.openshift-image-registry.svc:5000/${PROJECT}/myrhel10:latest"
 ```
 
-## Optional - Run OS container as a container for testing and QA
+## 10. Optional - Run OS container as a container for testing and QA
 Now we have a container image (as any other container image) but it holds a full operating system inside. As an optional step you can now test this OS-container like a classical container in your container runtime environmet by running it:
 
 ```bash
@@ -174,16 +174,28 @@ We used the following options of `podman run`
 | --name string | Assign a name to the container |
 This gives you the CMD-line prompt back while the container is running (in the background). When you stop the container it will be removed.
 
+Show all containers running:
+```bash
+podman ps
+```
+This should reveal exactly this one container, you just started.  
 Now connect into it with a bash:
 ```bash
-podman run -it myvm /bin/bash
+podman exec -it myvm /bin/bash
 ```
 | Option / Argument | Explaination |
 |:-----|:----------|
 |`-it` |  switches to interactive and pseydotty, which allows to have an interactive connection with your existing shell-environment. |
 | /bin/bash | Argument behind the container provides a command which should be executed - a shell in this case |
 
-Hint: Some commands might not be available within the container. Containers built lean and security aware only provided what the minimal neccesary to get the task fullfiled. 
+Find out what is running, and how the container looks like. Some commands, you might want to try:
+
+* ps -ef
+* df -k
+* mount
+* systemctl
+* ps -ef | head -10 (to undestand the first processes been started)
+* systemctl status httpd (you should not find an httpd service)
 
 After everything seems ok.  Exit from the container and stop the container again:
 ```bash
@@ -193,7 +205,7 @@ podman stop myvm
 
 
 
-## Convert the container image to a QCOW2 disk image
+## 11. Convert the container image to a QCOW2 disk image
 Now we have seen the container OS image running as a container. As we want this container image to look like a boot-disk, we need to convert it into a disk. There are many different kind of disks. We want a qcow2 disk, which is usable by KVM and Openshift-Virtualization.
 
 Red Hat provides a builder tool also provided as a container. So we will run this image-builder container with some parameters and with the OS containerimage location as the argument. The image-builder then has all information. 
@@ -230,7 +242,7 @@ The above step may take some time. So please execute the command before reviewin
 | `--config /config.json` | where within the container the config file is found |
 | `"image-registry.openshift-image-registry.svc:5000/${PROJECT}/myrhel10:latest"` | The image which should be converted |
 | `--output /output` | where within the container the output should be placed. As this dir is mounted form outside the container it will persistent after the container exited |
-```
+
 
 After the conversion finished, you should find a qcow image:
 ```bash
@@ -239,7 +251,7 @@ ls -lh output/qcow2/disk.qcow2
 
 Do not continue until the QCOW2 file exists.
 
-## Upload the QCOW2 disk 
+## 12. Upload the QCOW2 disk 
 Now we have a qcow2 image in our `thesource` VM. This needs to be provided as a golden image for OpenShift Virtualization. Upload it as a 12 GiB DataVolume in your project:
 
 ```bash
@@ -259,7 +271,7 @@ virtctl image-upload dv rhel10image --size=12Gi \
 | `--insecure` | in our environment we don't have singed certificates |
 | `--force-bind` | the created disk is forecd to be bound without waiting for a container or VM to request it |
 
-## Create the Image Mode VM 
+## 13. Create the Image Mode VM 
 
 `cloud.init.txt` supplies the SSH public key for the new VM. Encode it and create the VM from the uploaded DataVolume:
 
@@ -301,7 +313,7 @@ Let's find out what the parts of the commands do:
 | `\| oc create -f - -n "$PROJECT"` | pipe the json VM definiton to oc create to actually create the object in the named project |
 | `-f -` | use STDIN as input-file |
 
-## Check the VM
+## 14. Check the VM
 
 Wait for it to be ready and check its status:
 
@@ -314,7 +326,7 @@ oc get vmi rhel10imagemode -n "$PROJECT" -o wide
 You can also try `oc decribe ...` or `oc get vm ... -o ymal` or `oc get vmi ... -o ymal` to learn more about your VM.
 
 
-## Check look & feel within the  VM
+## 15. Check look & feel within the  VM
 From your computer, connect with `virtctl` and verify bootc and Apache:
 
 ```bash
@@ -330,7 +342,7 @@ This should show you the current boot system, current container being started. A
 
 ---
 
-## Fallback: If you got stuck or did not finish
+## 16. Fallback: If you got stuck or did not finish
 
 If you ran into issues building or uploading your image and cannot get `rhel10imagemode` running in time for the next lab, a pre-built backup VM named **`prep10imagemode`** is already provisioned in your project (`$PROJECT`).
 
