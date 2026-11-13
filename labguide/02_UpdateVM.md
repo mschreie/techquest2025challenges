@@ -26,9 +26,6 @@ By now, you should have a RHEL 10 Image Mode VM ready in your OpenShift project 
 * **Did you complete Lab 1?** Use the VM you built yourself: **`rhel10imagemode`**.
 * **Did you get stuck or run out of time in Lab 1?** No problem at all! Use the pre-provisioned backup VM already sitting in your namespace: **`prep10imagemode`**. *(Remember: `prep10imagemode` is switched off by default to save cluster resources, so start it first if you haven't already (see below).)*
 
-
-> **Important:** Both `rhel10imagemode` and `prep10imagemode` start out as minimal RHEL 10 Image Mode systems **without a web server (`httpd`) installed**. In this lab, you will install Apache atomically by updating your container image!
-
 ### Set Your Target VM Variable
 
 1. **On your laptop terminal**, set your credentials and choose which VM name you are using (`rhel10imagemode` or `prep10imagemode`):
@@ -54,9 +51,7 @@ By now, you should have a RHEL 10 Image Mode VM ready in your OpenShift project 
 
 ---
 
-## Update 1: Install & Enable the Apache Web Server (`httpd`) Atomically
-
-Because `/usr` is read-only on an Image Mode VM, you cannot run `dnf install httpd` inside `$TARGET_VM`. Instead, you will define the web server in your `Containerfile` on `thesource`, push the new image to the internal OpenShift registry, and let `bootc` deploy it.
+## Update 1: Customize the Message of the Day (`/etc/motd`)
 
 ### Step 1: Update the `Containerfile` on `thesource`
 
@@ -75,20 +70,16 @@ Because `/usr` is read-only on an Image Mode VM, you cannot run `dnf install htt
    PROJECT="mtv-$MYUID"
    ```
 
-3. **Update `Containerfile`** to install `httpd`, enable the systemd service at boot, and create a custom `index.html` welcome page:
+3. Alter your containerfile by appending a custom `/etc/motd`:
    ```bash
-   cat << 'EOF' > Containerfile
-   FROM image-registry.openshift-image-registry.svc:5000/openshift/rhel-bootc:10.2
+   cat << 'EOF' >> Containerfile
 
-   ADD etc /etc
-
-   RUN dnf install -y httpd cloud-init qemu-guest-agent && \
-       dnf clean all
-
-   RUN sed -i -e '$aPermitRootLogin yes' /etc/ssh/sshd_config
-   RUN systemctl enable httpd
-
-   RUN echo "<h1>Welcome on the new image mode webserver!</h1>" > /var/www/html/index.html
+   RUN tee -a /etc/motd  << 'MOTD'
+   =================================================================
+     RHEL 10 Image Mode (bootc) - Managed Web Server
+     All OS changes are immutable and version-controlled!
+   =================================================================
+   MOTD
    EOF
    ```
 
@@ -126,9 +117,7 @@ Because `/usr` is read-only on an Image Mode VM, you cannot run `dnf install htt
    ```bash
    sudo -i
    bootc status
-   curl localhost || echo "No web server running yet!"
    ```
-   Notice that `curl localhost` fails because `httpd` is not installed yet.
 
 3. **Authenticate to the OpenShift internal registry** so `bootc` can pull your new image:
    ```bash
@@ -148,7 +137,7 @@ Because `/usr` is read-only on an Image Mode VM, you cannot run `dnf install htt
    chmod 600 /etc/ostree/auth.json
    ```
 
-4. **Point `bootc` to your updated image (if using `prep10imagemode`) and run `bootc upgrade`:**
+4. **Point `bootc` to your updated image (if using `prep10imagemode`) or run `bootc upgrade`:**
    * If you are on **`rhel10imagemode`** (already tracking `${PROJECT}/myrhel10:latest`):
      ```bash
      bootc upgrade
@@ -163,38 +152,47 @@ Because `/usr` is read-only on an Image Mode VM, you cannot run `dnf install htt
    systemctl reboot
    ```
 
-### Step 4: Verify the Web Server and Rollback Capability
+### Step 4: Verify the motd change and Rollback Capability
 
 1. **Wait ~30 seconds, then reconnect to your VM** from your laptop:
    ```bash
    virtctl -n "$PROJECT" ssh -i ~/.ssh/id_techquest "cloud-user@vmi/$TARGET_VM"
    ```
 
-2. **Verify `bootc status` and test Apache**:
+2. **Verify `bootc status` and view motd**:
    ```bash
    sudo bootc status
-   systemctl is-active httpd
-   curl -s localhost
+   sudo -i
+   cat /etc/motd
    ```
    * `sudo bootc status` now shows your updated image under **`Booted image`** and your original image preserved under **`Rollback image`**!
-   * `curl -s localhost` outputs: `<h1>Welcome on the new image mode webserver!</h1>`].
-
-3. *(Optional)* Test from **`thesource`** using the VM's cluster or Multus IP (`oc get vmi -n "$PROJECT" -o wide`):
-   ```bash
-   curl http://<IP_OF_YOUR_IMAGEMODE_VM>
-   ```
+   * `sudo -i` should print the new message we defined.
+   * `cat /etc/motd` will show that exact same message once more.
 
 ---
 
-## Update 2: Customize the Message of the Day (`/etc/motd`)
+## Update 2: Install & Enable the Apache Web Server (`httpd`) Atomically
 
-Now that you have seen how cleanly `bootc` installs an entire service, try a second atomic update: adding a custom login banner (`/etc/motd`) for administrators.
+Now that you have seen how `bootc` updates OS and OS configuration, try a second atomic update: adding a web service.
 
-1. **Back on `thesource` (`/root/rhel_image_mode-main`)**, append a custom `/etc/motd` to your `Containerfile`:
+Because `/usr` is read-only on an Image Mode VM, you cannot run `dnf install httpd` inside `$TARGET_VM`. Instead, you will define the web server in your `Containerfile` on `thesource`, push the new image to the internal OpenShift registry, and let `bootc` deploy it.
+
+1. **Back on `thesource` (`/root/rhel_image_mode-main`)**, Update `Containerfile` to install `httpd`, enable systemd service at boot, and create a custom `index.html` welcome page:
    ```bash
-   cat << 'EOF' >> Containerfile
+   tee Containerfile << 'EOF' 
+   FROM image-registry.openshift-image-registry.svc:5000/openshift/rhel-bootc:10.2
 
-   RUN cat << 'MOTD' > /etc/motd
+   ADD etc /etc
+
+   RUN dnf install -y httpd cloud-init qemu-guest-agent && \
+       dnf clean all
+
+   RUN sed -i -e '$aPermitRootLogin yes' /etc/ssh/sshd_config
+   RUN systemctl enable httpd
+
+   RUN echo "<h1>Welcome on the new image mode webserver!</h1>" > /var/www/html/index.html
+
+   RUN tee -a /etc/motd  << 'MOTD'
    =================================================================
      RHEL 10 Image Mode (bootc) - Managed Web Server
      All OS changes are immutable and version-controlled!
@@ -202,6 +200,7 @@ Now that you have seen how cleanly `bootc` installs an entire service, try a sec
    MOTD
    EOF
    ```
+   Hint: While with tee (or cat respectively) we can accidentally overwrite earlier changes. In real life we would apply a diff (a patch) to ensure only intended change are made.
 
 2. **Rebuild and push** the updated image to the internal registry:
    ```bash
@@ -212,16 +211,33 @@ Now that you have seen how cleanly `bootc` installs an entire service, try a sec
        "image-registry.openshift-image-registry.svc:5000/${PROJECT}/myrhel10:latest"
    ```
 
-3. **Upgrade and reboot** your Image Mode VM (`$TARGET_VM`):
+3. Inspect the current deployment before upgrading your Image Mode VM ($TARGET_VM): 
+   ```bash
+   virtctl -n "$PROJECT" ssh -i ~/.ssh/id_techquest "cloud-user@vmi/$TARGET_VM" \
+       -c "sudo bootc status && curl localhost || echo "No web server running yet!"
+   ```
+   Notice that `curl localhost` fails because `httpd` is not installed yet.
+
+4. Upgrade and reboot your Image Mode VM ($TARGET_VM):
    ```bash
    virtctl -n "$PROJECT" ssh -i ~/.ssh/id_techquest "cloud-user@vmi/$TARGET_VM" \
        -c "sudo bootc upgrade && sudo systemctl reboot"
    ```
 
-4. **Reconnect via SSH** and see your new Message of the Day banner appear right upon login:
+5. **Reconnect via SSH** and check webservice
    ```bash
-   virtctl -n "$PROJECT" ssh -i ~/.ssh/id_techquest "cloud-user@vmi/$TARGET_VM"
+   virtctl -n "$PROJECT" ssh -i ~/.ssh/id_techquest "cloud-user@vmi/$TARGET_VM" \
+       -c "sudo bootc status && systemctl is-active httpd && curl -s localhost"
    ```
+
+   * `sudo bootc status` now shows your updated image under **`Booted image`** and your original image preserved under **`Rollback image`**!
+   * `curl -s localhost` outputs: `<h1>Welcome on the new image mode webserver!</h1>`].
+
+6. *(Optional)* Test from **`thesource`** using the VM's cluster or Multus IP (`oc get vmi -n "$PROJECT" -o wide`):
+   ```bash
+   curl http://<IP_OF_YOUR_IMAGEMODE_VM>
+   ```
+
 
 ---
 

@@ -162,6 +162,12 @@ podman push --tls-verify=false \
 ## 10. Optional - Run OS container as a container for testing and QA
 Now we have a container image (as any other container image) but it holds a full operating system inside. As an optional step you can now test this OS-container like a classical container in your container runtime environmet by running it:
 
+The following will boot and you will see the boot process on your terminal. To stop that process log in to `thesource` VM in another terminal window and `kill -9` the podman process.
+```bash
+podman run -it --rm --name myvm "image-registry.openshift-image-registry.svc:5000/${PROJECT}/myrhel10:latest"
+```
+
+Alternatively, not seeing the boot sequence, you can start the OS container into background:
 ```bash
 podman run -d --rm --name myvm "image-registry.openshift-image-registry.svc:5000/${PROJECT}/myrhel10:latest"
 ```
@@ -179,7 +185,7 @@ Show all containers running:
 podman ps
 ```
 This should reveal exactly this one container, you just started.  
-Now connect into it with a bash:
+Now connect into it with a bash (when started into background):
 ```bash
 podman exec -it myvm /bin/bash
 ```
