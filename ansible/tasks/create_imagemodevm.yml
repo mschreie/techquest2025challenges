@@ -82,6 +82,218 @@
   delay: 60
   changed_when: false
 
+- name: Remember the internal registry configuration
+  ansible.builtin.set_fact:
+    registry_config_path: /etc/containers/registries.conf.d/99-openshift-internal.conf
+    registry_config: "{{ lookup('file', repo_dir + '/files/99-openshift-internal.conf') }}"
+
+- name: Read each image mode VMI phase
+  ansible.builtin.command:
+    argv:
+      - oc
+      - get
+      - vmi
+      - prep10imagemode
+      - -n
+      - "mtv-user{{ item }}"
+      - -o
+      - jsonpath={.status.phase}
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: imagemode_phase
+  changed_when: false
+  failed_when: false
+
+- name: Start each stopped image mode VM
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - start
+      - prep10imagemode
+      - -n
+      - "mtv-user{{ item }}"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    index_var: user_index
+    label: "mtv-user{{ item }}"
+  when: imagemode_phase.results[user_index].rc != 0
+  changed_when: true
+
+- name: Wait until each image mode VMI is Ready before preparing it
+  ansible.builtin.command:
+    argv:
+      - oc
+      - wait
+      - --for=condition=Ready
+      - vmi/prep10imagemode
+      - -n
+      - "mtv-user{{ item }}"
+      - --timeout=60s
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: imagemode_prepare_ready
+  until: imagemode_prepare_ready.rc == 0
+  retries: 30
+  delay: 60
+  changed_when: false
+
+- name: Wait until SSH accepts connections on each image mode VM
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/prep10imagemode
+      - -c
+      - hostname
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: imagemode_ssh
+  until: imagemode_ssh.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Read the registry configuration from each image mode VM
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/prep10imagemode
+      - -c
+      - "sudo cat {{ registry_config_path }}"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: registry_config_checks
+  changed_when: false
+  failed_when: false
+
+- name: Install the internal registry configuration when it is missing or different
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/prep10imagemode
+      - -c
+      - >-
+        sudo install -d -m 0755 /etc/containers/registries.conf.d &&
+        sudo tee {{ registry_config_path }} >/dev/null &&
+        sudo restorecon {{ registry_config_path }}
+    stdin: "{{ registry_config }}"
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    index_var: user_index
+    label: "mtv-user{{ item }}"
+  when: >-
+    registry_config_checks.results[user_index].rc != 0 or
+    (registry_config_checks.results[user_index].stdout | trim) != (registry_config | trim)
+  changed_when: true
+
+- name: Check whether oc is installed on each image mode VM
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/prep10imagemode
+      - -c
+      - >-
+        sudo bash -lc 'test -x /var/usrlocal/bin/oc &&
+        grep -qxF "export PATH=/var/usrlocal/bin:\$PATH" /etc/profile.d/oc-path.sh'
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    label: "mtv-user{{ item }}"
+  register: oc_checks
+  changed_when: false
+  failed_when: false
+
+- name: Install oc where the image-mode disk stays writable
+  ansible.builtin.command:
+    argv:
+      - virtctl
+      - -n
+      - "mtv-user{{ item }}"
+      - ssh
+      - --known-hosts
+      - "{{ ssh_known_hosts }}"
+      - --local-ssh-opts=-o UserKnownHostsFile={{ ssh_known_hosts }}
+      - --local-ssh-opts=-o StrictHostKeyChecking=accept-new
+      - -i
+      - "{{ ssh_key }}"
+      - cloud-user@vmi/prep10imagemode
+      - -c
+      - >-
+        sudo bash -lc 'set -e;
+        mkdir -p /var/usrlocal/bin;
+        if [ ! -x /var/usrlocal/bin/oc ]; then
+        curl -fL -o /tmp/oc.tar https://downloads-openshift-console.apps.cluster-{{ cluster_id }}.dyn.redhatworkshops.io/amd64/linux/oc.tar;
+        tar xf /tmp/oc.tar -C /var/usrlocal/bin;
+        chmod 0755 /var/usrlocal/bin/oc;
+        chcon -t bin_t /var/usrlocal/bin/oc;
+        rm -f /tmp/oc.tar;
+        fi;
+        grep -qxF "export PATH=/var/usrlocal/bin:\$PATH" /etc/profile.d/oc-path.sh 2>/dev/null ||
+        printf "%s\n" "export PATH=/var/usrlocal/bin:\$PATH" > /etc/profile.d/oc-path.sh;
+        chmod 0644 /etc/profile.d/oc-path.sh;
+        echo TOOLS_READY'
+  environment:
+    PATH: "{{ repo_dir }}/..:{{ lookup('env', 'PATH') }}"
+  loop: "{{ user_ids }}"
+  loop_control:
+    index_var: user_index
+    label: "mtv-user{{ item }}"
+  when: oc_checks.results[user_index].rc != 0
+  register: oc_install
+  changed_when: "'TOOLS_READY' in oc_install.stdout"
+
 - name: Switch off prep10imagemode VMs to save cluster resources until needed
   ansible.builtin.command:
     argv:
