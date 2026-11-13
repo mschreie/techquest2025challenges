@@ -39,7 +39,7 @@ Set both values in `rhsm.sh`:
 - `RHSM_ORG_ID`
 - `RHSM_ACTIVATION_KEY`
 
-`configure_thesource.yml`, `prepare_util.yml`, and `cleanup_lab.yml` read this file. `ansible/prepare_all.yml` includes the first two, so `rhsm.sh` must exist before the full run. The task output hides these values.
+`03_configure_thesource.yml`, `06_prepare_util.yml`, and `cleanup_lab.yml` read this file. `ansible/prepare_all.yml` includes the first two, so `rhsm.sh` must exist before the full run. The task output hides these values.
 
 ## Run the preparation
 
@@ -52,24 +52,25 @@ ansible-playbook -i 'localhost,' -c local ansible/prepare_all.yml
 Run one step for every configured cluster by naming that playbook:
 
 ```bash
-ansible-playbook -i 'localhost,' -c local ansible/create_thesource.yml
+ansible-playbook -i 'localhost,' -c local ansible/00_create_thesource.yml
 ```
 
 `ansible/login_test.yml` only logs in to each cluster and checks that the session is `admin`.
 
 ## Preparation order for a new cluster
 
-`ansible/prepare_all.yml` runs steps 1–7 and then publishes the lab guide. `prepare_registry.yml` stays separate because it prompts for a token.
+`ansible/prepare_all.yml` runs `00` through `07` in this order. `prepare_registry.yml` stays separate because it prompts for a token.
 
-1. `ansible/create_thesource.yml` creates only missing participant VMs, using `MAXUSER` and `THESOURCEURL` from `env.sh`.
-2. `ansible/prepare_thesource.yml` waits until each `thesource` VMI is Ready and SSH accepts connections, then copies the lab ZIP when missing or different, extracts it only if the work directory is absent, and installs `oc`/`virtctl` only if missing.
-3. `ansible/configure_multus.yml` ensures each participant `thesource` has the flat network.
-4. `ansible/configure_thesource.yml` ensures the internal-registry config and verifies the Red Hat subscription organization from `rhsm.sh`.
-5. `ansible/create_imagemodevm.yml` creates only missing `rhel10imagemode` VMs from `IMAGEMODEVMURL` and waits until each one is Ready.
-6. `ansible/start_prep_vms.yml` starts stopped organizer-prepared VMs and waits for them to become Ready. A missing `util` VM is skipped here.
-7. `ansible/prepare_util.yml` waits until the `util` VMI is Ready, creates it on each cluster when it is missing, and prepares its tools and web server. Registration uses `rhsm.sh`.
-8. `ansible/prepare_registry.yml` prompts once for a Red Hat registry service-account username and token, then pushes the required images on every cluster. Run this only for a new cluster or when those images are missing.
-9. `ansible/publish_labguide.yml` publishes `labguide/` to each cluster's `util`. `credentials.yaml` stays outside the web root. Participants look up one team number at `/cgi-bin/credentials.cgi`. A mismatch between `credentials.yaml` and the clusters or users in `env.sh` is reported as a warning.
+1. `ansible/00_create_thesource.yml` creates only missing participant VMs, using `MAXUSER` and `THESOURCEURL` from `env.sh`.
+2. `ansible/01_prepare_thesource.yml` waits until each `thesource` VMI is Ready and SSH accepts connections, then copies the lab ZIP when missing or different, extracts it only if the work directory is absent, and installs `oc`/`virtctl` only if missing.
+3. `ansible/02_configure_multus.yml` ensures each participant `thesource` has the flat network.
+4. `ansible/03_configure_thesource.yml` ensures the internal-registry config and verifies the Red Hat subscription organization from `rhsm.sh`.
+5. `ansible/04_create_imagemodevm.yml` creates only missing `prep10imagemode` VMs from `IMAGEMODEVMURL`. It installs `oc` under `/var/usrlocal/bin` and the internal-registry setting, then stops the VMs.
+6. `ansible/05_start_prep_vms.yml` starts stopped organizer-prepared VMs and waits for them to become Ready. A missing `util` VM is skipped here.
+7. `ansible/06_prepare_util.yml` waits until the `util` VMI is Ready, creates it on each cluster when it is missing, and prepares its tools and web server. Registration uses `rhsm.sh`.
+8. `ansible/07_publish_labguide.yml` publishes `labguide/` to each cluster's `util`. `credentials.yaml` stays outside the web root. Participants look up one team number at `/cgi-bin/credentials.cgi`. A mismatch between `credentials.yaml` and the clusters or users in `env.sh` is reported as a warning.
+
+`ansible/prepare_registry.yml` prompts once for a Red Hat registry service-account username and token, then pushes the required images on every cluster. Run this only for a new cluster or when those images are missing. It is not part of `prepare_all.yml`.
 
 ## Clean up
 
