@@ -1,46 +1,18 @@
 # TODOs
-- Rename Imagemode VM to prep10imagemode (im Automatisierung) - Aina 
-	DONE. Updated in: ansible/tasks/create_imagemodevm.yml, ansible/tasks/start_prep_vms.yml and ansible/tasks/cleanup_lab.yml
-- switch off imagemode VM (in Automatisierung) - Aina
-	DONE
-- shell skripte löschen
-	DONE
-- Prepare Image Mode VM - As emergency if Step 1 cannot be completed 
-	STATUS: There is a image mode VM available, and documented. Deployment is automated. 
-	DONE: Removed httpd installation from the initial Containerfile so both prep10imagemode and rhel10imagemode start without a web server. This ensures users in 	step 02_UpdateVM install and enable Apache via bootc upgrade. Deployment of prep10imagemode is fully automated in prepare_all.yml
-- Try prepare_all.yml
-	DONE.
-- Try cleanup_lab.yml
-	DONE.
-- Read Lab Guide
-	DONE.
+-  prepare_all.yml
+	should include prepare_registries (needs some thinking because interactive)
+-  prepare_all.yml
+	needs to work more parallized
+- prepare_registries.yml
+	makes many long lasting steps with no output - should be better separated / visible
+
 - Improve Lab Guide - STATUS: started
 	01 DONE. I added the prep10imagemode part. 
 	02 not started at all
-- Document tiny-URL / QR Code: https://mo-hub.apps.int.spoke.prod.us-east-1.aws.paas.redhat.com/ (needs VPN)
+
 
 # TODOs before LAB starts
 - Tiny-URL / QR Code: https://mo-hub.apps.int.spoke.prod.us-east-1.aws.paas.redhat.com/
-- Multi-cluster
-- Run Playbooks
-
-ÄNDERUNGEN:
-00_login.sh, 01_create_vms.sh, 01_UNDO_delete_vms.sh, 02_ssh_prep_vms.sh, 03_create_utilVM.sh, 10_UpdateLabGuide, prepRegistry.sh: Alte Bash-Skripte entfernt, da die gesamte Automatisierung auf Ansible umgestellt wurde.
-
-prepare_all.yml, prepare_registry.yml, /ansible: Playbooks mit Nummern umbenannt und den zentralen Gesamtablauf (prepare_all.yml) neu strukturiert.
-
-start_prep_vms.yml: prep10imagemode angepasst.
-cleanup_lab.yml: prep10imagemode angepasst.
-create_imagemodevm.yml: prep10imagemode angepasst.
-
-ContainerFile: Apache (httpd) entfernt, damit rhel10imagemode und prep10imagemode VMs ohne Webserver starten und die Teilnehmer httpd erst im zweiten Schritt per bootc upgrade installieren können (02_UpdateVM.md).
-
-publish_labguide.yml: SSH-Optionen und dynamische Pfad-/Cluster-Variablen für die Veröffentlichung des Lab-Guides auf util korrigiert.
-md2html & markdown.conf: Konvertierung und Styling für die HTML-Generierung des Lab-Guides verbessert.
-01_BuildVM.md: Befehls- und Formatierungsdetails in der Build-Anleitung bereinigt. Fallback-Abschnitt hinzugefügt (prep10imagemode): Am Ende der Anleitung Schritte ergänzt, wie Teilnehmer, die bei Lab 1 nicht fertig werden oder hängen bleiben, die vorbereitete Backup-VM (prep10imagemode) starten, abwarten, per SSH verbinden und mit sudo bootc status überprüfen können.
-02_UpdateVM.md: Alten Inhalt unten beibehalten & neue Anleitung darüber eingefügt: Update 1 — Atomare Installation von Apache (httpd) & Update 2 — Zweite Übung zum Aktualisieren des Login-Banners (/etc/motd) über das Containerfile.
-
-Lab-Guides (01_BuildVM und 02_UpdateVM): Ich habe sie als user1 durchgespielt, dabei noch offene Stellen und Befehle korrigiert und die Anleitungen so überarbeitet, dass für die Teilnehmer alles klar und verständlich ist.   
 
 # List of things to improve or to change
 
@@ -50,31 +22,27 @@ The image mode vm needs:
 - /etc/containers/registries.conf.d/99-openshift-internal.conf
 - oc binary
 
-# STATUS: DONE IN ansible/cleanup_lab.yml. 
+Things to improve (from lab-execution):
+
+* Download oc and virtcl before starting to present (if not it takes too long?)
+* If possible build OCP environment from scratch
+	this would / could enable direkt ssh access to thesource -VM; this avoids oc and virtctl download.
+* Write in the description of the lab / into the invitation, which tools they need to download at home before the lab
+* Ansible Playbooks parallel instead of one after the others
+	needed for scaling 
+* Problems to run oc on Mac
+	xattr -l => lists 2 attributes
+	xattr -d => will delete these attributes, then it should work
+* Some companies hat firewalls, who prohibited the user from accessing the Red Hat Openshift console
+* ssh private key fomat was not easy to copy (whitespaces at end of lines)
+* sudouers.d file has typo within prepared image source - directory!
+* A user said it would be more usefull if we had everything in a lab so they did not have to log in and log out again (maybe ment credentials?)
+* oc and virtctl are not in image mode VM. (in built vm and preprovided vm) Workaraound: oc whoami -t | virtctl ssh
+* Time is good, maybe a bit too tight (also because we started a bit late and oc and virtctl)
+* Many users did not know how to access the oc and virtctl in the console
+* podman build explain what they are actually doing with it, because there were some users he did not understand
 
 OLD ISSUES:
-
-## ssh key handling
-Setting up new VMs create new ssh-host-keys which need to be updated in local known_hosts file. Currently i delete old key manualy and type yes 2x number of systems.
-
-# STATUS: DONE IN PLAYBOOKS. 
-
-. options to look at:
-ssh-keyscan server-name >> ~/.ssh/known_hosts
-OR: -o StrictHostKeyChecking=no 
-both might not work with "virtctl ssh ..."
-
-# STATUS: DONE IN PLAYBOOKS. 
-
-### ssh key handling multi cluster
-The Vms are identified with vmname and namespace, but in mutli-cluster setup we have duplicate host identifiers with differen host-keys.
-
-# STATUS: DONE IN PLAYBOOKS. 
-
-### Move from Bash to Ansible
-As this scales out to ca 40 hosts and has multiple steps, it would be nice if i could just redo the failed / still missing systems, instead of redoing them all. 
-
-# STATUS: DONE.
 
 ### subscription-manager
 I automated the registration but the deregistration does not happen, leaving load of orphaned entries in the account
@@ -85,8 +53,4 @@ I automated the registration but the deregistration does not happen, leaving loa
 We should start all VMs in prep to the challenge so the storage gets provisions
 
 # STATUS: DONE in ansible/start_prep_vms.yml
-
-### Set up Multus for image mode VM so that connectivity to the VM does not need local virtctl nor oc.
-
-# STATUS: PARTIAL.
 
